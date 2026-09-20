@@ -1,0 +1,312 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bike, MapPin, Phone, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { num, useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+import { logAudit } from "@/lib/audit";
+import { useActiveBranch } from "@/lib/active-branch";
+import {
+  deleteRiderAction,
+  listDeliveryOrdersAction,
+  listRidersAction,
+  upsertRiderAction,
+} from "@/actions/delivery";
+
+export const Route = createFileRoute("/_authenticated/riders")({
+  head: () => ({
+    meta: [
+      { title: "Delivery riders — Bazar Bari" },
+      {
+        name: "description",
+        content: "Manage delivery riders, contact numbers, vehicles and live order load.",
+      },
+      { property: "og:title", content: "Delivery riders — Bazar Bari" },
+      {
+        property: "og:description",
+        content: "Rider roster and assignment load for home delivery operations.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: RidersPage,
+});
+
+type Rider = {
+  id: string;
+  name: string;
+  phone: string;
+  vehicle: string;
+  nid: string | null;
+  is_active: boolean;
+  branch_id: string | null;
+  note: string | null;
+  current_lat: number | null;
+  current_lng: number | null;
+  location_updated_at: string | null;
+};
+
+const VEHICLES = ["bike", "cycle", "van", "foot"];
+
+function mapRider(r: Record<string, unknown>): Rider {
+  return {
+    id: String(r.id),
+    name: String(r.name ?? ""),
+    phone: String(r.phone ?? ""),
+    vehicle: String(r.vehicle_type ?? r.vehicle ?? "bike"),
+    nid: (r.nid as string) ?? null,
+    is_active: Boolean(r.is_active),
+    branch_id: (r.branch_id as string) ?? null,
+    note: (r.note as string) ?? null,
+    current_lat: r.current_lat != null ? Number(r.current_lat) : null,
+    current_lng: r.current_lng != null ? Number(r.current_lng) : null,
+    location_updated_at: r.location_updated_at
+      ? String(r.location_updated_at)
+      : null,
+  };
+}
+
+function RidersPage() {
+  const { lang } = useI18n();
+  const bn = lang === "bn";
+  const qc = useQueryClient();
+  const branch = useActiveBranch();
+  const [form, setForm] = useState({ name: "", phone: "", vehicle: "bike", nid: "" });
+
+  const riders = useQuery({
+    queryKey: ["riders"],
+    queryFn: async () => {
+      const res = await listRidersAction();
+      if (!res.ok) throw new Error(res.error);
+      return (res.riders as Record<string, unknown>[]).map(mapRider);
+    },
+  });
+
+  const openOrders = useQuery({
+    queryKey: ["rider-open-orders"],
+    staleTime: 20_000,
+    queryFn: async () => {
+      const res = await listDeliveryOrdersAction({ limit: 500 });
+      if (!res.ok) throw new Error(res.error);
+      return (res.orders as Array<{ id: string; rider_id: string | null; status: string }>).filter(
+        (o) => !["delivered", "cancelled"].includes(o.status),
+      );
+    },
+  });
+
+  const load = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const o of openOrders.data ?? []) {
+      if (!o.rider_id) continue;
+      map.set(o.rider_id, (map.get(o.rider_id) ?? 0) + 1);
+    }
+    return map;
+  }, [openOrders.data]);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["riders"] });
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!form.name.trim() || !form.phone.trim())
+        throw new Error(bn ? "নাম ও ফোন দিন" : "Name and phone required");
+      const res = await upsertRiderAction({
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        vehicle_type: form.vehicle,
+        nid: form.nid.trim() || null,
+        branch_id: branch.branchId ?? null,
+      });
+      if (!res.ok) throw new Error(res.error);
+      await logAudit("rider_create", { entity: "delivery_riders", details: form.name });
+    },
+    onSuccess: () => {
+      setForm({ name: "", phone: "", vehicle: "bike", nid: "" });
+      invalidate();
+      toast.success(bn ? "রাইডার যোগ হয়েছে" : "Rider added");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const patch = useMutation({
+    mutationFn: async ({ id, values }: { id: string; values: Partial<Rider> }) => {
+      const current = (riders.data ?? []).find((r) => r.id === id);
+      if (!current) throw new Error("Rider not found");
+      const merged = { ...current, ...values };
+      const res = await upsertRiderAction({
+        id,
+        name: merged.name,
+        phone: merged.phone,
+        vehicle_type: merged.vehicle,
+        nid: merged.nid,
+        branch_id: merged.branch_id,
+        note: merged.note,
+        is_active: merged.is_active,
+        current_lat: merged.current_lat,
+        current_lng: merged.current_lng,
+      });
+      if (!res.ok) throw new Error(res.error);
+      await logAudit("rider_update", { entity: "delivery_riders", entityId: id });
+    },
+    onSuccess: invalidate,
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const setLocation = useMutation({
+    mutationFn: async (id: string) => {
+      const current = (riders.data ?? []).find((r) => r.id === id);
+      if (!current) throw new Error("Rider not found");
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error("Geolocation unavailable"));
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15_000,
+        });
+      });
+      const res = await upsertRiderAction({
+        id,
+        name: current.name,
+        phone: current.phone,
+        vehicle_type: current.vehicle,
+        nid: current.nid,
+        branch_id: current.branch_id,
+        note: current.note,
+        is_active: current.is_active,
+        current_lat: pos.coords.latitude,
+        current_lng: pos.coords.longitude,
+      });
+      if (!res.ok) throw new Error(res.error);
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success(bn ? "লোকেশন আপডেট হয়েছে" : "Location updated");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await deleteRiderAction({ id });
+      if (!res.ok) throw new Error(res.error);
+      await logAudit("rider_delete", { entity: "delivery_riders", entityId: id });
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success(bn ? "মুছে ফেলা হয়েছে" : "Deleted");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  return (
+    <div className="space-y-4 p-4">
+      <h1 className="font-display text-2xl font-bold">
+        <Bike className="mr-2 inline size-6 text-primary" />
+        {bn ? "ডেলিভারি রাইডার" : "Delivery riders"}
+      </h1>
+
+      <div className="surface-panel grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Input
+          value={form.name}
+          maxLength={60}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder={bn ? "রাইডারের নাম" : "Rider name"}
+        />
+        <Input
+          value={form.phone}
+          maxLength={20}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          placeholder={bn ? "মোবাইল নম্বর" : "Phone"}
+          inputMode="tel"
+        />
+        <select
+          value={form.vehicle}
+          onChange={(e) => setForm({ ...form, vehicle: e.target.value })}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          {VEHICLES.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+        <Input
+          value={form.nid}
+          maxLength={30}
+          onChange={(e) => setForm({ ...form, nid: e.target.value })}
+          placeholder={bn ? "এনআইডি (ঐচ্ছিক)" : "NID (optional)"}
+        />
+        <Button onClick={() => create.mutate()} disabled={create.isPending}>
+          <Plus className="mr-1 size-4" />
+          {bn ? "যোগ করুন" : "Add"}
+        </Button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {(riders.data ?? []).map((r) => (
+          <div key={r.id} className="surface-panel space-y-2 p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-display font-bold">{r.name}</p>
+                <a
+                  href={`tel:${r.phone}`}
+                  className="flex items-center gap-1 text-sm text-muted-foreground"
+                >
+                  <Phone className="size-3" /> {r.phone}
+                </a>
+                <p className="text-xs text-muted-foreground">
+                  {r.vehicle}
+                  {r.nid ? ` · NID ${r.nid}` : ""}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {r.location_updated_at
+                    ? `${bn ? "লোকেশন" : "Location"}: ${r.location_updated_at.slice(0, 16).replace("T", " ")}`
+                    : bn
+                      ? "লোকেশন নেই"
+                      : "No location"}
+                </p>
+              </div>
+              <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold">
+                {bn ? "চলমান" : "Open"}: {num(load.get(r.id) ?? 0, lang)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => patch.mutate({ id: r.id, values: { is_active: !r.is_active } })}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold",
+                  r.is_active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+                )}
+              >
+                {r.is_active ? (bn ? "ডিউটিতে" : "On duty") : bn ? "বন্ধ" : "Off duty"}
+              </button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setLocation.mutate(r.id)}
+                disabled={setLocation.isPending}
+              >
+                <MapPin className="mr-1 size-3.5" />
+                {bn ? "লোকেশন আপডেট" : "Update location"}
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="ml-auto"
+                onClick={() => remove.mutate(r.id)}
+              >
+                <Trash2 className="size-4 text-destructive" />
+              </Button>
+            </div>
+          </div>
+        ))}
+        {(riders.data ?? []).length === 0 && (
+          <p className="text-muted-foreground">{bn ? "কোনো রাইডার নেই" : "No riders yet"}</p>
+        )}
+      </div>
+    </div>
+  );
+}

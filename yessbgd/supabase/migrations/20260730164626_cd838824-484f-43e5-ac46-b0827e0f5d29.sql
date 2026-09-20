@@ -1,0 +1,3 @@
+insert into public.cms_settings (key, label, "group", value, sort_order)
+values ('contact_map', 'Google Map', 'contact', jsonb_build_object('text', 'https://www.google.com/maps/embed?pb=!1m12!1m8!1m3!1d1335.1806239809775!2d90.36537864883196!3d23.824855996977362!3m2!1i1024!2i768!4f13.1!2m1!1syess%20bangla%20private%20limited!5e1!3m2!1sen!2sbd!4v1778393025429!5m2!1sen!2sbd'), 6)
+on conflict (key) do nothing;

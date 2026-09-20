@@ -1,0 +1,704 @@
+@import "tailwindcss" source(none);
+/* From src/app/: scan the parent src/ tree (NOT ../src → src/src). */
+@source "..";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Bazar Bari design system — deep teal + warm amber, retail counter feel.
+ * All colors are oklch semantic tokens. Never hardcode colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --font-sans: "Hind Siliguri", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Hind Siliguri", sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --shadow-panel: 0 1px 2px oklch(0.25 0.05 190 / 0.06), 0 8px 24px oklch(0.25 0.05 190 / 0.07);
+  --shadow-lift: 0 2px 6px oklch(0.25 0.05 190 / 0.08), 0 18px 40px oklch(0.25 0.05 190 / 0.12);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.978 0.008 175);
+  --foreground: oklch(0.24 0.035 200);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.035 200);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.035 200);
+  --primary: oklch(0.52 0.098 192);
+  --primary-foreground: oklch(0.985 0.01 180);
+  --secondary: oklch(0.945 0.017 185);
+  --secondary-foreground: oklch(0.3 0.045 195);
+  --muted: oklch(0.951 0.012 185);
+  --muted-foreground: oklch(0.52 0.028 200);
+  --accent: oklch(0.78 0.148 68);
+  --accent-foreground: oklch(0.25 0.06 60);
+  --destructive: oklch(0.577 0.221 24);
+  --destructive-foreground: oklch(0.985 0.005 0);
+  --success: oklch(0.62 0.135 155);
+  --success-foreground: oklch(0.985 0.01 155);
+  --warning: oklch(0.79 0.15 72);
+  --warning-foreground: oklch(0.28 0.06 60);
+  --border: oklch(0.906 0.015 190);
+  --input: oklch(0.906 0.015 190);
+  --ring: oklch(0.52 0.098 192);
+  --chart-1: oklch(0.52 0.098 192);
+  --chart-2: oklch(0.78 0.148 68);
+  --chart-3: oklch(0.62 0.135 155);
+  --chart-4: oklch(0.64 0.11 250);
+  --chart-5: oklch(0.68 0.16 25);
+  /* Menu bar / sidebar — soft sky-blue glass, matching the dashboard skin */
+  --sidebar: oklch(0.955 0.026 235);
+  --sidebar-foreground: oklch(0.33 0.045 250);
+  --sidebar-primary: oklch(0.55 0.17 258);
+  --sidebar-primary-foreground: oklch(0.98 0.01 235);
+  --sidebar-accent: oklch(0.9 0.045 238);
+  --sidebar-accent-foreground: oklch(0.3 0.06 258);
+  --sidebar-border: oklch(0.88 0.035 238);
+  --sidebar-ring: oklch(0.55 0.17 258);
+  --card-shade: none;
+  --text-scale: 1;
+}
+
+.dark {
+  --background: oklch(0.19 0.03 200);
+  --foreground: oklch(0.95 0.012 185);
+  --card: oklch(0.24 0.035 200);
+  --card-foreground: oklch(0.95 0.012 185);
+  --popover: oklch(0.24 0.035 200);
+  --popover-foreground: oklch(0.95 0.012 185);
+  --primary: oklch(0.72 0.11 187);
+  --primary-foreground: oklch(0.19 0.03 200);
+  --secondary: oklch(0.3 0.04 200);
+  --secondary-foreground: oklch(0.95 0.012 185);
+  --muted: oklch(0.3 0.04 200);
+  --muted-foreground: oklch(0.72 0.025 195);
+  --accent: oklch(0.78 0.148 68);
+  --accent-foreground: oklch(0.22 0.05 60);
+  --destructive: oklch(0.66 0.19 24);
+  --destructive-foreground: oklch(0.98 0.005 0);
+  --success: oklch(0.7 0.14 155);
+  --success-foreground: oklch(0.19 0.03 155);
+  --warning: oklch(0.82 0.15 72);
+  --warning-foreground: oklch(0.22 0.05 60);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.11 187);
+  --chart-1: oklch(0.72 0.11 187);
+  --chart-2: oklch(0.78 0.148 68);
+  --chart-3: oklch(0.7 0.14 155);
+  --chart-4: oklch(0.68 0.12 250);
+  --chart-5: oklch(0.72 0.16 25);
+  --sidebar: oklch(0.24 0.045 258);
+  --sidebar-foreground: oklch(0.96 0.015 240);
+  --sidebar-primary: oklch(0.8 0.13 250);
+  --sidebar-primary-foreground: oklch(0.2 0.05 258);
+  --sidebar-accent: oklch(0.32 0.055 255);
+  --sidebar-accent-foreground: oklch(0.99 0.01 240);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.72 0.14 250);
+  --card-shade: none;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    /* Fluid base size so the whole UI auto-fits small laptops → large screens */
+    font-size: calc(clamp(15px, 0.92rem + 0.18vw, 18px) * var(--text-scale, 1));
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+
+  /* Nothing may push the page wider than the viewport */
+  img,
+  video,
+  canvas,
+  svg,
+  iframe {
+    max-width: 100%;
+    height: auto;
+  }
+
+  pre,
+  code {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Auto-fit content areas: wide tables scroll inside their panel, text wraps */
+.app-fit {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-fit :where(table) {
+  width: 100%;
+}
+
+.app-fit :where([data-slot="table-container"], .table-wrap) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.app-fit :where(h1, h2, h3, p, span, td, th, label, a, li, button) {
+  overflow-wrap: break-word;
+}
+
+/* Never let the global wrap rule break intentionally single-line chips/rows */
+.app-fit .whitespace-nowrap,
+.app-fit .truncate {
+  overflow-wrap: normal;
+}
+
+
+/* Form controls never push a column wider than the screen */
+.app-fit :where(input, select, textarea) {
+  max-width: 100%;
+}
+
+
+
+
+@utility surface-panel {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-panel);
+}
+
+/*
+ * Top bar — shares the menu bar palette so profile / notification / toggle
+ * buttons read as one continuous sky-blue chrome.
+ */
+.app-topbar button,
+.app-topbar [role="button"],
+.app-topbar a {
+  color: var(--sidebar-foreground);
+}
+
+.app-topbar button:hover,
+.app-topbar [role="button"]:hover,
+.app-topbar a:hover {
+  background-color: color-mix(in oklab, var(--sidebar-accent) 75%, transparent);
+  color: var(--sidebar-accent-foreground);
+}
+
+.app-topbar button svg,
+.app-topbar [role="button"] svg {
+  color: color-mix(in oklab, var(--sidebar-primary) 78%, var(--sidebar-foreground));
+}
+
+.app-topbar [data-slot="button"][data-variant="outline"],
+.app-topbar button[class*="border"] {
+  border-color: color-mix(in oklab, var(--sidebar-primary) 22%, var(--sidebar-border));
+}
+
+/*
+ * Menu bar chrome — same hover / active indicator / transition behaviour on
+ * every dashboard route (the shell wraps all authenticated pages).
+ */
+.nav-item {
+  transition:
+    background-color 0.22s cubic-bezier(0.2, 0.7, 0.3, 1),
+    color 0.22s ease,
+    box-shadow 0.25s ease,
+    transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.nav-item:hover {
+  transform: translateX(2px);
+}
+
+[dir="rtl"] .nav-item:hover {
+  transform: translateX(-2px);
+}
+
+/* Keyboard focus ring — visible on every menu item and top bar control */
+.nav-item:focus-visible,
+.app-topbar button:focus-visible,
+.app-topbar a:focus-visible {
+  outline: 2px solid var(--sidebar-primary);
+  outline-offset: 2px;
+  border-radius: 0.75rem;
+}
+
+.nav-item:focus-visible {
+  background-color: color-mix(in oklab, var(--sidebar-accent) 80%, transparent);
+  color: var(--sidebar-accent-foreground);
+}
+
+.nav-item:active {
+  transform: translateX(1px) scale(0.99);
+}
+
+[dir="rtl"] .nav-item:active {
+  transform: translateX(-1px) scale(0.99);
+}
+
+.nav-icon {
+  transition:
+    color 0.22s ease,
+    transform 0.25s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.nav-item:hover .nav-icon {
+  transform: scale(1.08);
+}
+
+/* Animated left indicator bar for the active/selected menu item */
+.nav-indicator {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  height: 1.5rem;
+  width: 3px;
+  border-start-end-radius: 9999px;
+  border-end-end-radius: 9999px;
+  background-color: var(--sidebar-primary);
+  transform: translateY(-50%) scaleY(0);
+  opacity: 0;
+  transition:
+    transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1),
+    opacity 0.22s ease,
+    width 0.22s ease;
+}
+
+.nav-item:hover .nav-indicator {
+  opacity: 0.45;
+  transform: translateY(-50%) scaleY(0.55);
+}
+
+.nav-indicator[data-active="on"] {
+  opacity: 1;
+  width: 4px;
+  transform: translateY(-50%) scaleY(1);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--sidebar-primary) 55%, transparent);
+}
+
+/* Sub-menu connector dot */
+.nav-dot {
+  position: absolute;
+  inset-inline-start: -13px;
+  height: 0.375rem;
+  width: 0.375rem;
+  border-radius: 9999px;
+  background-color: transparent;
+  transform: scale(0.6);
+  transition:
+    background-color 0.22s ease,
+    transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    box-shadow 0.25s ease;
+}
+
+.nav-item:hover .nav-dot {
+  background-color: color-mix(in oklab, var(--sidebar-primary) 60%, transparent);
+  transform: scale(0.9);
+}
+
+.nav-dot[data-active="on"] {
+  background-color: var(--sidebar-primary);
+  transform: scale(1.15);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--sidebar-primary) 50%, transparent);
+}
+
+.nav-rail {
+  scrollbar-width: thin;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-item,
+  .nav-icon,
+  .nav-indicator,
+  .nav-dot {
+    transition: none;
+  }
+
+  .nav-item:hover {
+    transform: none;
+  }
+}
+
+/*
+ * Accessibility: high-contrast menu bar (saved in the dashboard theme panel).
+ * Applies to the whole app shell, in both light and dark mode.
+ */
+.app-chrome[data-dash-contrast="high"] .nav-item {
+  color: var(--sidebar-foreground);
+  font-weight: 600;
+}
+
+.app-chrome[data-dash-contrast="high"] .nav-icon {
+  color: color-mix(in oklab, var(--sidebar-primary) 45%, var(--sidebar-foreground));
+}
+
+.app-chrome[data-dash-contrast="high"] .nav-item:hover {
+  background-color: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+}
+
+.app-chrome[data-dash-contrast="high"] .nav-indicator[data-active="on"] {
+  width: 5px;
+}
+
+.app-chrome[data-dash-contrast="high"] .app-topbar button,
+.app-chrome[data-dash-contrast="high"] .app-topbar [role="button"],
+.app-chrome[data-dash-contrast="high"] .app-topbar a {
+  color: var(--sidebar-foreground);
+  font-weight: 600;
+}
+
+.dark .app-chrome[data-dash-contrast="high"] .nav-item {
+  color: oklch(0.99 0.005 240);
+}
+
+.dark .app-chrome[data-dash-contrast="high"] .nav-icon,
+.dark .app-chrome[data-dash-contrast="high"] .app-topbar button svg,
+.dark .app-chrome[data-dash-contrast="high"] .app-topbar [role="button"] svg {
+  color: oklch(0.97 0.02 240);
+}
+
+.dark .app-chrome[data-dash-contrast="high"] .nav-item[class*="bg-sidebar-primary"],
+.dark .app-chrome[data-dash-contrast="high"] .nav-item:hover {
+  background-color: color-mix(in oklab, var(--sidebar-primary) 30%, transparent);
+  color: oklch(1 0 0);
+}
+
+.dark .app-chrome[data-dash-contrast="high"] .nav-indicator {
+  background-color: oklch(0.9 0.09 250);
+}
+
+.dark .app-chrome[data-dash-contrast="high"] .app-topbar {
+  border-bottom-color: color-mix(in oklab, var(--sidebar-primary) 35%, transparent);
+}
+
+/* Dark mode: lift menu bar + top bar text/icon contrast */
+.dark .app-topbar button svg,
+.dark .app-topbar [role="button"] svg {
+  color: color-mix(in oklab, var(--sidebar-primary) 60%, oklch(0.98 0.01 240));
+}
+
+
+/*
+ * Dashboard skin — hue-driven glass palette, scoped to /dashboard so POS and
+ * other modules keep the teal system. The active palette is chosen with
+ * [data-dash-theme] and the light/dark variant with [data-dash-mode].
+ */
+.dashboard-skin {
+  --dash-h: 235;
+  --dash-ph: 258;
+  --dash-ah: 215;
+}
+
+.dashboard-skin[data-dash-theme="lavender"] {
+  --dash-h: 285;
+  --dash-ph: 274;
+  --dash-ah: 330;
+}
+
+.dashboard-skin[data-dash-theme="mint"] {
+  --dash-h: 172;
+  --dash-ph: 168;
+  --dash-ah: 145;
+}
+
+.dashboard-skin[data-dash-theme="sunset"] {
+  --dash-h: 48;
+  --dash-ph: 36;
+  --dash-ah: 20;
+}
+
+.dashboard-skin[data-dash-theme="slate"] {
+  --dash-h: 250;
+  --dash-ph: 252;
+  --dash-ah: 240;
+}
+
+.dashboard-skin[data-dash-theme="slate"] {
+  --dash-sat: 0.012;
+}
+
+.dashboard-skin {
+  --dash-sat: 0.026;
+
+  --background: oklch(0.965 var(--dash-sat) var(--dash-h));
+  --foreground: oklch(0.3 0.05 var(--dash-ph));
+  --card: oklch(1 0 0 / 0.74);
+  --card-foreground: oklch(0.3 0.05 var(--dash-ph));
+  --popover: oklch(0.995 0.006 var(--dash-h));
+  --popover-foreground: oklch(0.3 0.05 var(--dash-ph));
+  --primary: oklch(0.55 0.17 var(--dash-ph));
+  --primary-foreground: oklch(0.99 0.005 var(--dash-ph));
+  --secondary: oklch(0.94 0.035 var(--dash-h));
+  --secondary-foreground: oklch(0.38 0.09 var(--dash-ph));
+  --muted: oklch(0.948 var(--dash-sat) var(--dash-h));
+  --muted-foreground: oklch(0.55 0.04 var(--dash-ph));
+  --accent: oklch(0.82 0.1 var(--dash-ah));
+  --accent-foreground: oklch(0.3 0.07 var(--dash-ph));
+  --success: oklch(0.66 0.16 155);
+  --warning: oklch(0.8 0.14 78);
+  --destructive: oklch(0.62 0.21 18);
+  --border: oklch(0.9 0.03 var(--dash-h));
+  --input: oklch(0.9 0.03 var(--dash-h));
+  --ring: oklch(0.55 0.17 var(--dash-ph));
+  --chart-1: oklch(0.55 0.17 var(--dash-ph));
+  --chart-2: oklch(0.7 0.13 var(--dash-ah));
+  --chart-3: oklch(0.66 0.16 155);
+  --chart-4: oklch(0.62 0.14 280);
+  --chart-5: oklch(0.72 0.15 55);
+  --shadow-panel: 0 1px 2px oklch(0.4 0.1 var(--dash-ph) / 0.06), 0 12px 34px -18px oklch(0.4 0.12 var(--dash-ph) / 0.35);
+  --shadow-lift: 0 2px 8px oklch(0.4 0.1 var(--dash-ph) / 0.1), 0 22px 48px -24px oklch(0.4 0.12 var(--dash-ph) / 0.45);
+
+  border-radius: var(--radius-3xl);
+  background-image:
+    radial-gradient(120% 90% at 88% -8%, oklch(0.82 0.1 var(--dash-h) / 0.55) 0%, transparent 60%),
+    radial-gradient(90% 80% at 2% 100%, oklch(0.86 0.08 var(--dash-ah) / 0.5) 0%, transparent 62%),
+    linear-gradient(180deg, oklch(0.955 0.032 var(--dash-h)) 0%, oklch(0.975 0.018 var(--dash-ph)) 100%);
+  color: var(--foreground);
+}
+
+/* ---- Glass surfaces: cards, table headers and chart panels ---- */
+.dashboard-skin[data-dash-glass="on"] .surface-panel,
+.dashboard-skin[data-dash-glass="on"] [class*="bg-card"],
+.dashboard-skin[data-dash-glass="on"] [data-slot="card"] {
+  backdrop-filter: blur(16px) saturate(150%);
+  background-color: color-mix(in oklab, var(--color-card) 78%, transparent);
+  border-color: color-mix(in oklab, var(--primary) 14%, var(--color-border));
+}
+
+.dashboard-skin[data-dash-glass="on"] thead,
+.dashboard-skin[data-dash-glass="on"] thead th,
+.dashboard-skin[data-dash-glass="on"] [data-slot="table-header"] {
+  backdrop-filter: blur(12px);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--primary) 12%, transparent) 0%,
+    color-mix(in oklab, var(--primary) 4%, transparent) 100%
+  );
+  color: color-mix(in oklab, var(--primary) 72%, var(--foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+}
+
+.dashboard-skin[data-dash-glass="on"] .recharts-wrapper,
+.dashboard-skin[data-dash-glass="on"] .recharts-surface {
+  border-radius: var(--radius-xl);
+}
+
+.dashboard-skin[data-dash-glass="on"] .recharts-default-tooltip,
+.dashboard-skin[data-dash-glass="on"] .recharts-tooltip-wrapper > div {
+  backdrop-filter: blur(14px);
+  background-color: color-mix(in oklab, var(--color-card) 82%, transparent) !important;
+  border: 1px solid color-mix(in oklab, var(--primary) 20%, var(--color-border)) !important;
+  border-radius: var(--radius-lg);
+}
+
+.dashboard-skin[data-dash-glass="on"] .recharts-cartesian-grid line {
+  stroke: color-mix(in oklab, var(--primary) 16%, transparent);
+}
+
+/* ---- Dark variant ---- */
+.dashboard-skin[data-dash-mode="dark"] {
+  --background: oklch(0.21 0.035 var(--dash-ph));
+  --foreground: oklch(0.95 0.015 var(--dash-h));
+  --card: oklch(0.27 0.04 var(--dash-ph) / 0.75);
+  --card-foreground: oklch(0.95 0.015 var(--dash-h));
+  --popover: oklch(0.27 0.04 var(--dash-ph));
+  --popover-foreground: oklch(0.95 0.015 var(--dash-h));
+  --primary: oklch(0.74 0.13 var(--dash-ph));
+  --primary-foreground: oklch(0.19 0.04 var(--dash-ph));
+  --secondary: oklch(0.32 0.045 var(--dash-ph));
+  --secondary-foreground: oklch(0.95 0.015 var(--dash-h));
+  --muted: oklch(0.32 0.045 var(--dash-ph));
+  --muted-foreground: oklch(0.74 0.03 var(--dash-h));
+  --accent: oklch(0.5 0.11 var(--dash-ah));
+  --accent-foreground: oklch(0.96 0.01 var(--dash-h));
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.74 0.13 var(--dash-ph));
+  --chart-1: oklch(0.74 0.13 var(--dash-ph));
+  --chart-2: oklch(0.72 0.13 var(--dash-ah));
+  --shadow-panel: 0 1px 2px oklch(0 0 0 / 0.3), 0 12px 34px -18px oklch(0 0 0 / 0.6);
+  --shadow-lift: 0 2px 8px oklch(0 0 0 / 0.35), 0 22px 48px -24px oklch(0 0 0 / 0.7);
+
+  color: var(--foreground);
+  background-image:
+    radial-gradient(120% 90% at 88% -8%, oklch(0.5 0.13 var(--dash-ph) / 0.4) 0%, transparent 58%),
+    radial-gradient(90% 80% at 4% 104%, oklch(0.45 0.1 var(--dash-ah) / 0.35) 0%, transparent 60%),
+    linear-gradient(180deg, oklch(0.22 0.035 var(--dash-h)) 0%, oklch(0.2 0.03 var(--dash-ph)) 100%);
+}
+
+
+
+/*
+ * Storefront skin — "Editorial bento" direction for the consumer shop
+ * (/). Scoped so the operator dashboard keeps its own type scale.
+ */
+.storefront {
+  font-family: "Figtree", "Hind Siliguri", ui-sans-serif, system-ui, sans-serif;
+  --shop-radius: 1.75rem;
+}
+
+.storefront h1,
+.storefront h2,
+.storefront h3,
+.storefront .font-display {
+  font-family: "Outfit", "Hind Siliguri", sans-serif;
+  letter-spacing: -0.025em;
+}
+
+@utility shop-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 1.75rem;
+  box-shadow: 0 1px 2px oklch(0.25 0.05 190 / 0.05), 0 10px 30px -22px oklch(0.25 0.05 190 / 0.5);
+}
+
+@utility shop-tile {
+  transition:
+    transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1),
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in oklab, var(--primary) 45%, var(--color-border));
+    box-shadow: 0 18px 40px -28px oklch(0.25 0.05 190 / 0.75);
+  }
+}
+
+@utility gradient-brand {
+  background-image: linear-gradient(135deg, var(--primary) 0%, oklch(0.42 0.09 205) 55%, oklch(0.35 0.07 215) 100%);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes soft-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@utility rise-in {
+  animation: rise-in 0.7s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@utility soft-float {
+  animation: soft-float 7s ease-in-out infinite;
+}
+
+/* Corporate info card with a faint photographic shade + subtle lift on hover */
+@utility shade-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1),
+    box-shadow 0.4s ease,
+    border-color 0.4s ease;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image: var(--card-shade);
+    background-size: cover;
+    background-position: center;
+    opacity: 0.06;
+    transition:
+      opacity 0.5s ease,
+      transform 0.7s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 22px 45px -28px oklch(0 0 0 / 0.6);
+    border-color: color-mix(in oklab, var(--primary) 40%, var(--color-border));
+  }
+
+  &:hover::before {
+    opacity: 0.16;
+    transform: scale(1.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in,
+  .soft-float {
+    animation: none;
+  }
+}

@@ -1,0 +1,871 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Banknote,
+  Boxes,
+  HandCoins,
+  Receipt,
+  RotateCcw,
+  ShoppingCart,
+  Trophy,
+  Truck,
+  Undo2,
+
+  TrendingUp,
+  Users,
+  Wallet,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { supabase } from "@/lib/db-client";
+import { money, num, useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+import { useMyRole } from "@/lib/use-my-role";
+import { useActiveBranch } from "@/lib/active-branch";
+import { canAccess, type Feature } from "@/lib/permissions";
+import { DASHBOARD_WIDGETS, useDashboards, type DashboardWidget } from "@/lib/dashboards";
+import { dashboardThemeAttrs, useDashboardTheme } from "@/lib/dashboard-theme";
+import { DashboardThemePanel } from "@/components/DashboardThemePanel";
+import { Button } from "@/components/ui/button";
+import { ChannelStatusPanel } from "@/components/ChannelStatusPanel";
+
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Bike, Home, LayoutGrid, MapPin, Megaphone, Plus, Search, Settings2, ShoppingBasket, Star, Store, Trash2 } from "lucide-react";
+
+export const Route = createFileRoute("/_authenticated/dashboard")({
+  head: () => ({
+    meta: [
+      { title: "Dashboard — Bazar Bari" },
+      { name: "description", content: "Daily sales totals, dues, profit, cash flow and low-stock alerts." },
+      { property: "og:title", content: "Dashboard — Bazar Bari" },
+      { property: "og:description", content: "Sales, dues, profit, cash flow and stock at a glance." },
+    ],
+  }),
+  component: DashboardPage,
+});
+
+type RangeKey = "today" | "week" | "month" | "year";
+
+function rangeStart(key: RangeKey) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  if (key === "week") d.setDate(d.getDate() - 6);
+  if (key === "month") d.setDate(1);
+  if (key === "year") {
+    d.setMonth(0);
+    d.setDate(1);
+  }
+  return d;
+}
+
+function DashboardPage() {
+  const { t, lang } = useI18n();
+  const me = useMyRole();
+  const { branch, canSwitch, branchId } = useActiveBranch();
+  const scopeId = canSwitch ? null : branchId;
+  const dash = useDashboards(me.data?.userId ?? null);
+  const dashTheme = useDashboardTheme();
+  const range = dash.active.range as RangeKey;
+  const setRange = (r: RangeKey) => dash.update({ range: r });
+  const show = (w: DashboardWidget) => dash.active.widgets.includes(w);
+  const [tab, setTab] = useState<"sale" | "purchase" | "payment" | "quotation">("sale");
+  const [showAllActions, setShowAllActions] = useState(false);
+  const [moduleQuery, setModuleQuery] = useState("");
+
+
+
+  const from = rangeStart(range);
+  const fromIso = from.toISOString();
+  const fromDate = fromIso.slice(0, 10);
+
+  // Staff locked to one location only ever see that location's numbers.
+  const scoped = <T,>(q: T): T => (scopeId ? (q as any).eq("branch_id", scopeId) : q);
+
+  const stats = useQuery({
+    queryKey: ["dashboard", range, scopeId],
+    queryFn: async () => {
+      const [
+        salesRes,
+        productsRes,
+        itemsRes,
+        purchasesRes,
+        returnsRes,
+        expensesRes,
+        contactsRes,
+        paymentsRes,
+        purchaseReturnsRes,
+      ] = await Promise.all([
+          scoped(
+            supabase
+              .from("sales")
+              .select("id,invoice_no,total,paid,status,created_at,customer_name,payment_method")
+              .gte("created_at", fromIso),
+          )
+            .order("created_at", { ascending: false }),
+          supabase.from("products").select("id,name_en,name_bn,stock,low_stock_at,unit,cost"),
+          supabase.from("sale_items").select("sale_id,product_id,name_snapshot,quantity,line_total"),
+          scoped(
+            supabase
+              .from("purchases")
+              .select("id,ref_no,total,paid,purchased_on,created_at")
+              .gte("purchased_on", fromDate),
+          )
+            .order("purchased_on", { ascending: false }),
+          supabase.from("sale_returns").select("id,total,created_at").gte("created_at", fromIso),
+          scoped(supabase.from("expenses").select("amount,spent_on,payment_method").gte("spent_on", fromDate)),
+          supabase.from("contacts").select("id,type"),
+          scoped(
+            supabase
+              .from("payments")
+              .select("id,amount,direction,method,paid_on,note")
+              .gte("paid_on", fromDate),
+          )
+            .order("paid_on", { ascending: false }),
+          supabase.from("purchase_returns").select("id,total,created_at").gte("created_at", fromIso),
+        ]);
+
+      for (const r of [
+        salesRes,
+        productsRes,
+        itemsRes,
+        purchasesRes,
+        returnsRes,
+        expensesRes,
+        contactsRes,
+        paymentsRes,
+        purchaseReturnsRes,
+      ]) {
+        if (r.error) throw r.error;
+      }
+
+      return {
+        sales: salesRes.data ?? [],
+        products: productsRes.data ?? [],
+        items: itemsRes.data ?? [],
+        purchases: purchasesRes.data ?? [],
+        returns: returnsRes.data ?? [],
+        expenses: expensesRes.data ?? [],
+        contacts: contactsRes.data ?? [],
+        payments: paymentsRes.data ?? [],
+        purchaseReturns: purchaseReturnsRes.data ?? [],
+      };
+    },
+  });
+
+
+  const d = stats.data;
+  const sales = d?.sales ?? [];
+  const products = d?.products ?? [];
+  const items = d?.items ?? [];
+  const purchases = d?.purchases ?? [];
+  const returns = d?.returns ?? [];
+  const expenses = d?.expenses ?? [];
+  const contacts = d?.contacts ?? [];
+  const payments = d?.payments ?? [];
+  const purchaseReturns = d?.purchaseReturns ?? [];
+  const quotations = sales.filter((s) => s.status === "quotation");
+
+
+  const finalSales = sales.filter((s) => s.status === "final");
+  const saleTotal = finalSales.reduce((s, r) => s + Number(r.total), 0);
+  const salePaid = finalSales.reduce((s, r) => s + Number(r.paid), 0);
+  const saleDue = Math.max(saleTotal - salePaid, 0);
+  const returnTotal = returns.reduce((s, r) => s + Number(r.total), 0);
+  const purchaseReturnTotal = purchaseReturns.reduce((s, r) => s + Number(r.total), 0);
+
+  const purchaseTotal = purchases.reduce((s, r) => s + Number(r.total), 0);
+  const purchasePaid = purchases.reduce((s, r) => s + Number(r.paid), 0);
+  const purchaseDue = Math.max(purchaseTotal - purchasePaid, 0);
+  const expenseTotal = expenses.reduce((s, r) => s + Number(r.amount), 0);
+  const dueReceived = payments.filter((p) => p.direction === "in").reduce((s, p) => s + Number(p.amount), 0);
+  const paidOut = payments.filter((p) => p.direction === "out").reduce((s, p) => s + Number(p.amount), 0);
+
+  const costById = new Map(products.map((p) => [p.id, Number(p.cost ?? 0)]));
+  const finalIds = new Set(finalSales.map((s) => s.id));
+  const rangeItems = items.filter((it) => finalIds.has(it.sale_id as string));
+  const cogs = rangeItems.reduce(
+    (s, it) => s + Number(costById.get(it.product_id as string) ?? 0) * Number(it.quantity),
+    0,
+  );
+  const profit = saleTotal - returnTotal - cogs - expenseTotal;
+
+  const customers = contacts.filter((c) => c.type === "customer").length;
+  const suppliers = contacts.filter((c) => c.type === "supplier").length;
+  const stockValue = products.reduce((s, p) => s + Number(p.stock) * Number(p.cost ?? 0), 0);
+  const lowStock = products.filter((p) => p.stock <= p.low_stock_at);
+
+  const cashIn = salePaid + dueReceived;
+  const cashOut = purchasePaid + paidOut + expenseTotal;
+
+  const cards = [
+    { icon: Users, label: t("totalCustomer"), value: num(customers, lang), tone: "text-chart-1" },
+    { icon: Truck, label: t("totalSupplier"), value: num(suppliers, lang), tone: "text-chart-2" },
+    { icon: TrendingUp, label: t("totalSales"), value: money(saleTotal, lang), tone: "text-primary" },
+    { icon: RotateCcw, label: t("saleReturn"), value: money(returnTotal, lang), tone: "text-destructive" },
+    { icon: ShoppingCart, label: t("totalPurchase"), value: money(purchaseTotal, lang), tone: "text-chart-3" },
+    { icon: Undo2, label: t("purchaseReturn"), value: money(purchaseReturnTotal, lang), tone: "text-warning" },
+    { icon: Receipt, label: t("todayOrders"), value: num(finalSales.length, lang), tone: "text-chart-4" },
+
+    { icon: Banknote, label: t("paid"), value: money(salePaid, lang), tone: "text-chart-2" },
+    { icon: HandCoins, label: t("totalDueAmount"), value: money(saleDue, lang), tone: "text-destructive" },
+    { icon: ArrowDownLeft, label: t("totalReceived"), value: money(dueReceived, lang), tone: "text-chart-1" },
+    { icon: ArrowUpRight, label: t("totalPurchasePaid"), value: money(purchasePaid, lang), tone: "text-chart-3" },
+    { icon: AlertTriangle, label: t("totalPurchaseDue"), value: money(purchaseDue, lang), tone: "text-destructive" },
+    { icon: Wallet, label: t("totalExpense"), value: money(expenseTotal, lang), tone: "text-chart-5" },
+  ];
+
+  const chart = Array.from({ length: 7 }).map((_, i) => {
+    const day = new Date();
+    day.setDate(day.getDate() - (6 - i));
+    const key = day.toDateString();
+    return {
+      day: day.toLocaleDateString(lang === "bn" ? "bn-BD" : "en-US", { weekday: "short" }),
+      total: sales
+        .filter((s) => new Date(s.created_at).toDateString() === key)
+        .reduce((sum, s) => sum + Number(s.total), 0),
+    };
+  });
+
+  const top = Object.values(
+    rangeItems.reduce<Record<string, { name: string; qty: number; total: number }>>((acc, it) => {
+      const key = it.name_snapshot;
+      acc[key] ??= { name: key, qty: 0, total: 0 };
+      acc[key].qty += it.quantity;
+      acc[key].total += Number(it.line_total);
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 5);
+
+  const activity = useQuery({
+    queryKey: ["dashboard-activity"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("audit_logs")
+        .select("id,username,action,entity,created_at")
+        .order("created_at", { ascending: false })
+        .limit(8);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const quickActions = ([
+    { to: "/pos", feature: "pos", label: t("pos"), icon: ShoppingCart },
+    { to: "/sales", feature: "sales", label: t("sales"), icon: Receipt },
+    { to: "/products", feature: "products", label: t("products"), icon: Boxes },
+    { to: "/product-audit", feature: "product-audit", label: lang === "bn" ? "ছবি অডিট" : "Image audit", icon: Boxes },
+    { to: "/catalog", feature: "catalog", label: t("catalog"), icon: Boxes },
+
+    { to: "/stock-adjustments", feature: "stock-adjustments", label: t("stockAdjust"), icon: Boxes },
+    { to: "/stock-count", feature: "stock-count", label: t("stockCount"), icon: Boxes },
+    { to: "/labels", feature: "labels", label: t("labels"), icon: Receipt },
+    { to: "/branches", feature: "branches", label: t("branches"), icon: Receipt },
+    { to: "/stock-transfers", feature: "stock-transfers", label: t("stockTransfer"), icon: Truck },
+    { to: "/purchases", feature: "purchases", label: t("purchases"), icon: Truck },
+    { to: "/purchase-orders", feature: "purchase-orders", label: t("purchaseOrders"), icon: Truck },
+    { to: "/payments", feature: "payments", label: t("paymentsLedger"), icon: HandCoins },
+    { to: "/expenses", feature: "expenses", label: t("expenses"), icon: Wallet },
+    { to: "/mobile-payments", feature: "mobile-payments", label: lang === "bn" ? "মোবাইল পেমেন্ট" : "Mobile payments", icon: HandCoins },
+    { to: "/accounts", feature: "accounts", label: t("accounts"), icon: Wallet },
+    { to: "/chart-of-accounts", feature: "chart-of-accounts", label: t("chartOfAccounts"), icon: Wallet },
+    { to: "/journal", feature: "journal", label: t("journal"), icon: Receipt },
+    { to: "/day-book", feature: "day-book", label: t("dayBook"), icon: Receipt },
+    { to: "/financials", feature: "financials", label: t("financials"), icon: TrendingUp },
+    { to: "/party-statement", feature: "party-statement", label: t("partyStatement"), icon: Users },
+    { to: "/contacts", feature: "contacts", label: t("contacts"), icon: Users },
+    { to: "/users", feature: "users", label: t("usersRoles"), icon: Users },
+    { to: "/reports", feature: "reports", label: t("reports"), icon: TrendingUp },
+    { to: "/inventory", feature: "inventory", label: t("inventoryStatus"), icon: Boxes },
+    { to: "/audit-logs", feature: "audit-logs", label: t("auditLog"), icon: Receipt },
+    { to: "/assistant", feature: "assistant", label: t("aiAssistant"), icon: Trophy },
+    { to: "/settings", feature: "settings", label: t("settings"), icon: Settings2 },
+    { to: "/site-content", feature: "site-content", label: t("websiteContent"), icon: Settings2 },
+    { to: "/api-hub", feature: "api-hub", label: t("apiHub"), icon: Settings2 },
+
+    {
+      to: "/commerce",
+      feature: "commerce",
+      label: lang === "bn" ? "ই-কমার্স ড্যাশবোর্ড" : "Commerce dashboard",
+      icon: Store,
+    },
+    {
+      to: "/delivery-orders",
+      feature: "delivery-orders",
+      label: lang === "bn" ? "ডেলিভারি অর্ডার" : "Delivery orders",
+      icon: Truck,
+    },
+    { to: "/riders", feature: "riders", label: lang === "bn" ? "রাইডার" : "Riders", icon: Bike },
+    {
+      to: "/delivery-zones",
+      feature: "delivery-zones",
+      label: lang === "bn" ? "ডেলিভারি এলাকা" : "Delivery zones",
+      icon: MapPin,
+    },
+    { to: "/promotions", feature: "promotions", label: lang === "bn" ? "প্রোমোশন" : "Promotions", icon: Megaphone },
+    { to: "/reviews", feature: "reviews", label: lang === "bn" ? "রিভিউ" : "Reviews", icon: Star },
+  ] as { to: string; feature: Feature; label: string; icon: typeof ShoppingCart }[]).filter((a) =>
+    canAccess(me.data?.role, a.feature),
+  );
+
+  const ESSENTIAL_LINKS = [
+    "/pos",
+    "/sales",
+    "/products",
+    "/contacts",
+    "/payments",
+    "/purchases",
+    "/expenses",
+    "/inventory",
+    "/delivery-orders",
+    "/reports",
+  ];
+  const essentialActions = quickActions.filter((a) => ESSENTIAL_LINKS.includes(a.to));
+  const visibleActions = showAllActions ? quickActions : essentialActions;
+  const q = moduleQuery.trim().toLowerCase();
+  const moduleCards = q
+    ? quickActions.filter((a) => a.label.toLowerCase().includes(q) || a.to.toLowerCase().includes(q))
+    : visibleActions;
+
+
+
+  const widgetLabel: Record<DashboardWidget, string> = {
+    shortcuts: lang === "bn" ? "শর্টকাট" : "Shortcuts",
+    kpi: lang === "bn" ? "কেপিআই কার্ড" : "KPI cards",
+    highlights: lang === "bn" ? "হাইলাইট" : "Highlights",
+    ledgers: lang === "bn" ? "লেজার" : "Ledgers",
+    chart: lang === "bn" ? "চার্ট" : "Chart",
+    bestseller: lang === "bn" ? "বেস্ট সেলার" : "Best sellers",
+    transactions: lang === "bn" ? "সাম্প্রতিক লেনদেন" : "Recent transactions",
+    activity: lang === "bn" ? "কার্যকলাপ" : "Activity",
+    lowstock: lang === "bn" ? "কম স্টক" : "Low stock",
+  };
+
+  const ranges: { key: RangeKey; label: string }[] = [
+    { key: "today", label: t("rangeToday") },
+    { key: "week", label: t("rangeWeek") },
+    { key: "month", label: t("rangeMonth") },
+    { key: "year", label: t("rangeYear") },
+  ];
+
+  return (
+    <div
+      className="dashboard-skin space-y-4 p-4"
+      {...dashboardThemeAttrs(dashTheme.theme, dashTheme.mode, dashTheme.glass, dashTheme.contrast)}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-bold">
+          {t("welcome")}{" "}
+          <span className="text-primary">{me.data?.username ?? ""}</span>
+          <span className="ml-2 align-middle text-xs font-medium text-muted-foreground">
+            {branch?.name ?? t("noBranch")}
+            {!canSwitch && ` · ${t("branchLocked")}`}
+          </span>
+        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <a href="/" target="_blank" rel="noreferrer">
+              <Home className="size-4" />
+              {lang === "bn" ? "মূল ওয়েবসাইট" : "Main site"}
+            </a>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <a href="/" target="_blank" rel="noreferrer">
+              <ShoppingBasket className="size-4" />
+              {lang === "bn" ? "হোম ডেলিভারি" : "Home delivery"}
+            </a>
+          </Button>
+          <div className="inline-flex overflow-hidden rounded-xl border border-border bg-card">
+            {ranges.map((r) => (
+              <button
+                key={r.key}
+                onClick={() => setRange(r.key)}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium transition-colors",
+                  range === r.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="surface-panel flex flex-wrap items-center gap-2 p-2">
+        <LayoutGrid className="ml-1 size-4 text-primary" />
+        {dash.presets.map((d) => (
+          <button
+            key={d.id}
+            onClick={() => dash.setActiveId(d.id)}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
+              d.id === dash.activeId ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {d.name}
+          </button>
+        ))}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            const name = window.prompt(lang === "bn" ? "নতুন ড্যাশবোর্ডের নাম" : "New dashboard name");
+            if (name?.trim()) dash.add(name.trim().slice(0, 24));
+          }}
+        >
+          <Plus className="mr-1 size-4" />
+          {lang === "bn" ? "নতুন" : "New"}
+        </Button>
+        <div className="ml-auto flex items-center gap-1">
+          <DashboardThemePanel
+            theme={dashTheme.theme}
+            mode={dashTheme.mode}
+            glass={dashTheme.glass}
+            contrast={dashTheme.contrast}
+            onChange={dashTheme.save}
+            onReset={dashTheme.reset}
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Settings2 className="mr-1 size-4" />
+                {lang === "bn" ? "কাস্টমাইজ" : "Customise"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>{lang === "bn" ? "উইজেট" : "Widgets"}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {DASHBOARD_WIDGETS.map((w) => (
+                <DropdownMenuCheckboxItem
+                  key={w}
+                  checked={show(w)}
+                  onSelect={(e) => e.preventDefault()}
+                  onCheckedChange={() => dash.toggleWidget(w)}
+                >
+                  {widgetLabel[w]}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {dash.presets.length > 1 && (
+            <Button size="icon" variant="ghost" onClick={() => dash.remove(dash.activeId)}>
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {show("shortcuts") && (
+      <section className="rounded-3xl border border-border/60 bg-gradient-to-br from-secondary/60 via-card to-card p-4 shadow-panel">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl font-bold">
+              {lang === "bn" ? "আমার ওয়ার্কস্পেস" : "My workspace"}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {num(quickActions.length, lang)} {lang === "bn" ? "টি মডিউল উপলব্ধ" : "modules available"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={moduleQuery}
+                onChange={(e) => setModuleQuery(e.target.value)}
+                placeholder={lang === "bn" ? "খুঁজুন..." : "Search"}
+                aria-label={lang === "bn" ? "মডিউল খুঁজুন" : "Search modules"}
+                className="h-10 w-44 rounded-full border border-border bg-card/80 pl-9 pr-3 text-sm outline-none backdrop-blur transition-colors placeholder:text-muted-foreground focus:border-primary/60 sm:w-60"
+              />
+            </div>
+            <Button asChild size="icon" className="size-10 rounded-full shadow-lift">
+              <Link to="/pos" aria-label={lang === "bn" ? "নতুন বিক্রয়" : "New sale"}>
+                <Plus className="size-5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {moduleCards.map((a) => {
+            const meta = moduleMeta(a.to, lang === "bn");
+            return (
+              <div
+                key={a.to}
+                className="group rounded-2xl border border-border/60 bg-card/70 p-4 shadow-panel backdrop-blur transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lift"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-display text-base font-semibold">{a.label}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta.hint}</p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                      meta.tone,
+                    )}
+                  >
+                    {meta.group}
+                  </span>
+                </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <Link
+                    to={a.to}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+                  >
+                    <a.icon className="size-4" />
+                    {lang === "bn" ? "খুলুন" : "Open"}
+                  </Link>
+                  <a
+                    href={a.to}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    {lang === "bn" ? "নতুন ট্যাব" : "New tab"}
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+          {moduleCards.length === 0 && (
+            <p className="text-sm text-muted-foreground">{t("noData")}</p>
+          )}
+        </div>
+
+        {!moduleQuery && quickActions.length > essentialActions.length && (
+          <div className="mt-3 flex justify-center">
+            <Button size="sm" variant="ghost" onClick={() => setShowAllActions((v) => !v)}>
+              {showAllActions
+                ? lang === "bn"
+                  ? "কম দেখান"
+                  : "Show less"
+                : lang === "bn"
+                  ? "সব মডিউল দেখান"
+                  : "Show all modules"}
+            </Button>
+          </div>
+        )}
+
+      </section>
+      )}
+
+
+      <ChannelStatusPanel branchId={branch?.id} />
+
+
+      {show("kpi") && (
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        {cards.map((c) => (
+          <div key={c.label} className="surface-panel p-3">
+            <span className={cn("mb-2 flex size-9 items-center justify-center rounded-lg bg-secondary", c.tone)}>
+              <c.icon className="size-4" />
+            </span>
+            <p className="text-xs text-muted-foreground">{c.label}</p>
+            <p className="font-display text-lg font-bold">{c.value}</p>
+          </div>
+        ))}
+      </div>
+      )}
+
+      {show("highlights") && (
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="surface-panel p-4 text-center">
+          <Trophy className="mx-auto size-7 text-primary" />
+          <p className="mt-1 text-sm font-semibold">{t("profit")}</p>
+          <p className="font-display text-2xl font-bold text-primary">{money(profit, lang)}</p>
+        </div>
+        <div className="surface-panel p-4 text-center">
+          <Boxes className="mx-auto size-7 text-chart-2" />
+          <p className="mt-1 text-sm font-semibold">{t("stockValue")}</p>
+          <p className="font-display text-2xl font-bold">{money(stockValue, lang)}</p>
+        </div>
+        <div className="surface-panel p-4 text-center">
+          <Boxes className="mx-auto size-7 text-chart-4" />
+          <p className="mt-1 text-sm font-semibold">{t("totalProducts")}</p>
+          <p className="font-display text-2xl font-bold">{num(products.length, lang)}</p>
+        </div>
+        <div className="surface-panel p-4 text-center">
+          <AlertTriangle className="mx-auto size-7 text-destructive" />
+          <p className="mt-1 text-sm font-semibold">{t("lowStockItems")}</p>
+          <p className="font-display text-2xl font-bold">{num(lowStock.length, lang)}</p>
+        </div>
+      </div>
+      )}
+
+      {show("ledgers") && (
+      <div className="grid gap-4 lg:grid-cols-3">
+        <LedgerCard
+          title={t("assets")}
+          rows={[
+            [t("receivableDue"), money(saleDue, lang)],
+            [t("stockValue"), money(stockValue, lang)],
+          ]}
+        />
+        <LedgerCard
+          title={t("liabilities")}
+          rows={[
+            [t("supplierDue"), money(purchaseDue, lang)],
+            [t("totalExpense"), money(expenseTotal, lang)],
+          ]}
+        />
+        <LedgerCard
+          title={t("cashInOut")}
+          rows={[
+            [t("cashIn"), money(cashIn, lang)],
+            [t("cashOut"), money(cashOut, lang)],
+            [t("netCash"), money(cashIn - cashOut, lang)],
+          ]}
+        />
+      </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {show("chart") && (
+        <div className="surface-panel p-4 lg:col-span-2">
+          <h2 className="mb-4 text-lg font-semibold">{t("last7days")}</h2>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={48} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "0.5rem",
+                    color: "var(--card-foreground)",
+                  }}
+                />
+                <Bar dataKey="total" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        )}
+
+        {show("bestseller") && (
+        <div className="surface-panel p-4">
+          <h2 className="mb-3 text-lg font-semibold">{t("bestSeller")}</h2>
+          {top.length === 0 && <p className="text-sm text-muted-foreground">{t("noData")}</p>}
+          <ul className="space-y-2">
+            {top.map((p) => (
+              <li key={p.name} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                <span className="text-muted-foreground">
+                  {num(p.qty, lang)} · {money(p.total, lang)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {show("transactions") && (
+        <div className="surface-panel overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-2 px-4 py-3">
+            <h2 className="text-lg font-semibold">{t("recentTransactions")}</h2>
+          </div>
+          <div className="flex gap-1 border-b border-border px-3">
+            {([
+              ["sale", t("sales")],
+              ["purchase", t("purchases")],
+              ["quotation", t("quotation")],
+              ["payment", t("paymentsLedger")],
+
+            ] as const).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className={cn(
+                  "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
+                  tab === k ? "border-primary text-primary" : "border-transparent text-muted-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] text-sm">
+              <tbody>
+                {tab === "sale" &&
+                  sales.slice(0, 6).map((s) => (
+                    <tr key={s.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 font-medium">#{num(Number(s.invoice_no), lang)}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{new Date(s.created_at).toLocaleDateString()}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{s.payment_method}</td>
+                      <td className="px-4 py-2 text-right font-semibold">{money(Number(s.total), lang)}</td>
+                    </tr>
+                  ))}
+                {tab === "purchase" &&
+                  purchases.slice(0, 6).map((p) => (
+                    <tr key={p.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 font-medium">#{num(Number(p.ref_no), lang)}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{p.purchased_on}</td>
+                      <td className="px-4 py-2 text-right font-semibold">{money(Number(p.total), lang)}</td>
+                    </tr>
+                  ))}
+                {tab === "quotation" &&
+                  quotations.slice(0, 6).map((s) => (
+                    <tr key={s.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 font-medium">#{num(Number(s.invoice_no), lang)}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{new Date(s.created_at).toLocaleDateString()}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{s.customer_name ?? "—"}</td>
+                      <td className="px-4 py-2 text-right font-semibold">{money(Number(s.total), lang)}</td>
+                    </tr>
+                  ))}
+                {tab === "payment" &&
+                  payments.slice(0, 6).map((p) => (
+                    <tr key={p.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 font-medium">{p.direction === "in" ? "▲" : "▼"} {p.method}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{p.paid_on}</td>
+                      <td className="px-4 py-2 text-right font-semibold">{money(Number(p.amount), lang)}</td>
+                    </tr>
+                  ))}
+                {((tab === "sale" && sales.length === 0) ||
+                  (tab === "purchase" && purchases.length === 0) ||
+                  (tab === "quotation" && quotations.length === 0) ||
+                  (tab === "payment" && payments.length === 0)) && (
+
+                  <tr>
+                    <td className="px-4 py-6 text-muted-foreground" colSpan={4}>
+                      {t("noData")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        )}
+
+        {show("activity") && (
+        <div className="surface-panel p-4">
+          <h2 className="mb-3 text-lg font-semibold">{t("recentActivity")}</h2>
+          {(activity.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">{t("noData")}</p>}
+          <ul className="space-y-2">
+            {(activity.data ?? []).map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="font-medium">{a.username ?? "—"}</span>{" "}
+                  <span className="text-muted-foreground">{a.action}</span>
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {new Date(a.created_at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        )}
+
+        {show("lowstock") && (
+        <div className="surface-panel p-4">
+          <h2 className="mb-3 text-lg font-semibold">{t("lowStockItems")}</h2>
+          {lowStock.length === 0 && <p className="text-sm text-muted-foreground">{t("noData")}</p>}
+          <ul className="space-y-2">
+            {lowStock.slice(0, 8).map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 flex-1 truncate">{lang === "bn" ? p.name_bn : p.name_en}</span>
+                <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs font-semibold text-warning-foreground">
+                  {num(p.stock, lang)} {p.unit}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LedgerCard({ title, rows }: { title: string; rows: [string, string][] }) {
+  return (
+    <div className="surface-panel overflow-hidden p-0">
+      <h2 className="border-b border-border px-4 py-3 text-lg font-semibold">{title}</h2>
+      <table className="w-full text-sm">
+        <tbody>
+          {rows.map(([k, v]) => (
+            <tr key={k} className="border-b border-border last:border-0">
+              <td className="px-4 py-2.5 text-muted-foreground">{k}</td>
+              <td className="px-4 py-2.5 text-right font-semibold">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const MODULE_GROUPS: { match: string[]; bn: string; en: string; tone: string }[] = [
+  {
+    match: ["/pos", "/sales", "/labels", "/promotions", "/reviews"],
+    bn: "বিক্রয়",
+    en: "Sales",
+    tone: "bg-primary/15 text-primary",
+  },
+  {
+    match: ["/products", "/catalog", "/inventory", "/stock-adjustments", "/stock-count", "/stock-transfers", "/product-audit"],
+    bn: "স্টক",
+    en: "Stock",
+    tone: "bg-chart-2/20 text-chart-2",
+  },
+  {
+    match: ["/purchases", "/purchase-orders", "/contacts", "/party-statement"],
+    bn: "সরবরাহ",
+    en: "Supply",
+    tone: "bg-chart-3/20 text-chart-3",
+  },
+  {
+    match: ["/payments", "/expenses", "/accounts", "/chart-of-accounts", "/journal", "/day-book", "/financials", "/mobile-payments"],
+    bn: "হিসাব",
+    en: "Finance",
+    tone: "bg-chart-4/20 text-chart-4",
+  },
+  {
+    match: ["/commerce", "/delivery-orders", "/riders", "/delivery-zones"],
+    bn: "ডেলিভারি",
+    en: "Delivery",
+    tone: "bg-warning/25 text-warning-foreground",
+  },
+  {
+    match: ["/users", "/settings", "/api-hub", "/site-content", "/audit-logs", "/branches", "/media"],
+    bn: "সেটিংস",
+    en: "Admin",
+    tone: "bg-muted text-muted-foreground",
+  },
+];
+
+/** Badge group + short hint shown on each workspace card. */
+function moduleMeta(to: string, bn: boolean) {
+  const g = MODULE_GROUPS.find((x) => x.match.includes(to));
+  return {
+    group: g ? (bn ? g.bn : g.en) : bn ? "টুল" : "Tool",
+    tone: g?.tone ?? "bg-secondary text-secondary-foreground",
+    hint: bn ? `মডিউল · ${to}` : `Module · ${to}`,
+  };
+}

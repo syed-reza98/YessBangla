@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.touch_application_status_updated_at() FROM PUBLIC, anon, authenticated;

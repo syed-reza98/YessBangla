@@ -1,0 +1,17 @@
+# cPanel / Apache — proxy to Phusion Passenger (Node standalone)
+# Place this in the app's public document root (or subdomain docroot).
+# Adjust PASSENGER_PORT to match the Node app PORT in cPanel.
+
+RewriteEngine On
+
+# Keep uploaded media on disk (do not route through Node when file exists)
+RewriteCond %{REQUEST_URI} ^/uploads/
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Proxy everything else to the Passenger/Node port
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ http://127.0.0.1:PASSENGER_PORT/$1 [P,L]
+
+ProxyPreserveHost On
+RequestHeader set X-Forwarded-Proto "https" env=HTTPS

@@ -1,0 +1,31 @@
+{
+  "_comment": "Yess Bangla — কোম্পানি প্রোফাইল PDF page settings. ভবিষ্যতে এখান থেকেই মার্জিন/ফুটার পরিবর্তন করুন।",
+  "format": "A4",
+  "orientation": "portrait",
+  "margins": {
+    "top": "44mm",
+    "right": "18mm",
+    "bottom": "32mm",
+    "left": "18mm"
+  },
+  "header": {
+    "enabled": true,
+    "image": "public/letterhead-header.png",
+    "heightMm": 35.6
+  },
+  "footer": {
+    "enabled": true,
+    "image": "public/letterhead-footer.png",
+    "heightMm": 29.7,
+    "pageNumber": {
+      "enabled": true,
+      "format": "Page {page} / {total}",
+      "alignment": "right",
+      "fontSizePt": 8.5,
+      "color": "#FFFFFF",
+      "marginBottomMm": 2.5,
+      "marginRightMm": 12
+    }
+  },
+  "skipHeaderFooterOnFirstPage": false
+}

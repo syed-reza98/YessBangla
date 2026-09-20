@@ -1,0 +1,15 @@
+{
+  "_comment": "Single source of truth for Yess Bangla contact details. Mirrors src/lib/companyContact.ts. Keep both files in sync; the Python letterhead/profile generators read this JSON.",
+  "legalName": "Yess Bangla Private Limited",
+  "shortName": "YESS Bangla",
+  "phone": {
+    "display": "+880 1805-464343",
+    "tel": "+8801805464343"
+  },
+  "email": "yessbangla.bd@gmail.com",
+  "web": "www.yessbd.com",
+  "webUrl": "https://www.yessbd.com",
+  "office": "Block-A, Road-3, House-127 (Green View), 1st Floor, Mirpur-12, Dhaka-1216",
+  "corporateOffice": "Section-11, Block-A, Main Road-3, Plot-10, Mirpur, Pallabi, Dhaka-1216",
+  "combinedAddress": "Office: Block-A, Road-3, House-127 (Green View) (1st Floor), Mirpur-12, Dhaka-1216 · Corporate Office: Section-11, Block-A, Main Road-3, Plot-10, Mirpur, Pallabi, Dhaka-1216"
+}

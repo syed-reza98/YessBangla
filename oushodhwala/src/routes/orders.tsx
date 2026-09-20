@@ -1,0 +1,298 @@
+import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { useStore } from "@/lib/store";
+import { useAuth } from "@/hooks/useAuth";
+import { createOrderReturnAction } from "@/actions/admin-entities";
+import { listMyOrdersAction, cancelMyOrderAction } from "@/actions/orders-query";
+import { useT } from "@/lib/i18n";
+import { printInvoice } from "@/lib/invoice";
+
+
+export const Route = createFileRoute("/orders")({
+  head: () => ({
+    meta: [
+      { title: "আমার অর্ডার — ঔষধওয়ালা" },
+      { name: "description", content: "আপনার সব অর্ডারের অবস্থা ও ট্র্যাকিং দেখুন এক জায়গায়।" },
+      { property: "og:title", content: "আমার অর্ডার — ঔষধওয়ালা" },
+      { property: "og:description", content: "অর্ডার ট্র্যাক করুন ও পুনরায় অর্ডার দিন।" },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
+  ssr: false,
+  component: Orders,
+});
+
+const STEPS = [
+  { key: "confirmed", bn: "নিশ্চিত হয়েছে", en: "Confirmed" },
+  { key: "processing", bn: "প্রস্তুত হচ্ছে", en: "Processing" },
+  { key: "shipped", bn: "পথে আছে", en: "Shipped" },
+  { key: "delivered", bn: "ডেলিভারি হয়েছে", en: "Delivered" },
+];
+
+const LABEL: Record<string, { bn: string; en: string }> = {
+  confirmed: { bn: "নিশ্চিত হয়েছে", en: "Confirmed" },
+  processing: { bn: "প্রস্তুত হচ্ছে", en: "Processing" },
+  shipped: { bn: "পথে আছে", en: "Shipped" },
+  delivered: { bn: "ডেলিভারি হয়েছে", en: "Delivered" },
+  cancelled: { bn: "বাতিল", en: "Cancelled" },
+};
+
+const REASONS = [
+  { key: "damaged", bn: "পণ্য ক্ষতিগ্রস্ত", en: "Item damaged" },
+  { key: "wrong_item", bn: "ভুল পণ্য এসেছে", en: "Wrong item delivered" },
+  { key: "expired", bn: "মেয়াদোত্তীর্ণ", en: "Expired product" },
+  { key: "not_needed", bn: "আর প্রয়োজন নেই", en: "No longer needed" },
+  { key: "other", bn: "অন্যান্য", en: "Other" },
+];
+
+function Orders() {
+  const t = useT();
+  const { add } = useStore();
+  const { user, loading } = useAuth();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [returnFor, setReturnFor] = useState<string | null>(null);
+  const [reason, setReason] = useState("damaged");
+  const [details, setDetails] = useState("");
+  const [msg, setMsg] = useState<{ id: string; text: string } | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-orders"],
+    enabled: !!user,
+    queryFn: async () => {
+      const result = await listMyOrdersAction();
+      if (!result.ok) throw new Error(result.error);
+      return result.orders as any[];
+    },
+  });
+
+  async function cancelOrder(id: string, no: string) {
+    if (!window.confirm(t(`অর্ডার #${no} বাতিল করতে চান?`, `Cancel order #${no}?`))) return;
+    setBusy(id);
+    const result = await cancelMyOrderAction({ orderNo: no });
+    setBusy(null);
+    setMsg({ id, text: result.ok ? t("অর্ডার বাতিল হয়েছে।", "Order cancelled.") : t("বাতিল করা যায়নি।", "Could not cancel.") });
+    if (result.ok) void qc.invalidateQueries({ queryKey: ["my-orders"] });
+  }
+
+  async function submitReturn(id: string, no: string) {
+    if (!user) return;
+    setBusy(id);
+    const _or = await createOrderReturnAction({
+      user_id: user.id,
+      order_id: id,
+      order_no: no,
+      reason,
+      details: details.trim() || null,
+    });
+    setBusy(null);
+    if (!error) {
+      setReturnFor(null);
+      setDetails("");
+    }
+    setMsg({
+      id,
+      text: error ? t("অনুরোধ পাঠানো যায়নি।", "Could not submit.") : t("রিটার্ন অনুরোধ জমা হয়েছে।", "Return request submitted."),
+    });
+  }
+
+
+  if (loading || (user && isLoading)) {
+    return <p className="pt-16 text-center text-sm text-muted-foreground">{t("লোড হচ্ছে...", "Loading...")}</p>;
+  }
+
+  if (!user) {
+    return (
+      <div className="pt-16 text-center">
+        <p className="text-4xl">🧾</p>
+        <h1 className="mt-3 text-base font-bold">{t("অর্ডার দেখতে লগইন করুন", "Log in to view orders")}</h1>
+        <Link to="/auth" className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">
+          {t("লগইন করুন", "Log in")}
+        </Link>
+      </div>
+    );
+  }
+
+  const orders = data ?? [];
+
+  if (orders.length === 0) {
+    return (
+      <div className="pt-16 text-center">
+        <p className="text-4xl">🧾</p>
+        <h1 className="mt-3 text-base font-bold">{t("এখনো কোনো অর্ডার নেই", "No orders yet")}</h1>
+        <Link
+          to="/products"
+          search={{ q: "", category: "all", sort: "popular" }}
+          className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
+        >
+          {t("কেনাকাটা শুরু করুন", "Start shopping")}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-4">
+      <h1 className="text-base font-bold">{t("আমার অর্ডার", "My Orders")}</h1>
+      <div className="mt-3 space-y-3">
+        {orders.map((o) => {
+          const idx = STEPS.findIndex((s) => s.key === o.status);
+          const cancelled = o.status === "cancelled";
+          return (
+            <article key={o.id} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-bold">#{o.order_no}</p>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cancelled ? "bg-sale text-sale-foreground" : "bg-secondary"}`}>
+                  {t(LABEL[o.status]?.bn ?? o.status, LABEL[o.status]?.en ?? o.status)}
+                </span>
+                <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">
+                  {o.payment_method.toUpperCase()} · {o.payment_status === "paid" ? t("পরিশোধিত", "Paid") : t("বাকি", "Due")}
+                </span>
+                <p className="ml-auto text-sm font-bold text-primary-dark">{t.money(Math.round(Number(o.total)))}</p>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {new Date(o.created_at).toLocaleString(t.en ? "en-US" : "bn-BD")} · {o.slot} · {o.address}
+              </p>
+
+              {!cancelled && (
+                <ol className="mt-3 flex items-center gap-1">
+                  {STEPS.map((s, i) => (
+                    <li key={s.key} className="flex-1">
+                      <div className={`h-1 rounded-full ${i <= idx ? "bg-primary" : "bg-border"}`} />
+                      <p className={`mt-1 text-[9px] ${i <= idx ? "font-semibold text-primary" : "text-muted-foreground"}`}>{t(s.bn, s.en)}</p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              <ul className="mt-3 space-y-1 text-xs">
+                {o.order_items.map((l) => (
+                  <li key={l.id} className="flex justify-between">
+                    <span className="text-muted-foreground">{l.name} × {t.n(l.qty)}</span>
+                    <span className="font-semibold">{t.money(Math.round(Number(l.price) * l.qty))}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {o.order_events.length > 0 && (
+                <ul className="mt-3 space-y-1 border-t border-border pt-2 text-[10px] text-muted-foreground">
+                  {[...o.order_events]
+                    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+                    .map((e) => (
+                      <li key={e.id}>
+                        {new Date(e.created_at).toLocaleString(t.en ? "en-US" : "bn-BD")} — {t(LABEL[e.status]?.bn ?? e.status, LABEL[e.status]?.en ?? e.status)}
+                        {e.note ? ` · ${e.note}` : ""}
+                      </li>
+                    ))}
+                </ul>
+              )}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() =>
+                    o.order_items.forEach((l) =>
+                      add({ id: l.product_id, kind: l.kind as "product" | "lab", name: l.name, price: Number(l.price) }, l.qty),
+                    )
+                  }
+                  className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary"
+                >
+                  {t("আবার অর্ডার করুন", "Reorder")}
+                </button>
+                <button
+                  onClick={() => {
+                    const ok = printInvoice(
+                      {
+                        order_no: o.order_no,
+                        created_at: o.created_at,
+                        customer_name: o.customer_name,
+                        phone: o.phone,
+                        address: o.address,
+                        slot: o.slot,
+                        subtotal: Number(o.subtotal),
+                        delivery_fee: Number(o.delivery_fee),
+                        discount: Number(o.discount),
+                        total: Number(o.total),
+                        payment_method: o.payment_method,
+                        payment_status: o.payment_status,
+                        payment_ref: o.payment_ref,
+                        items: o.order_items.map((l) => ({ name: l.name, qty: l.qty, price: Number(l.price) })),
+                      },
+                      { en: t.en, money: t.money, n: t.n },
+                    );
+                    if (!ok) setMsg({ id: o.id, text: t("পপআপ ব্লক করা আছে — অনুমতি দিন।", "Popup blocked — please allow popups.") });
+                  }}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold"
+                >
+                  🧾 {t("রশিদ / ইনভয়েস", "Invoice")}
+                </button>
+                {!cancelled && (
+
+                  <Link
+                    to="/track/$no"
+                    params={{ no: o.order_no }}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                  >
+                    🛵 {t("লাইভ ট্র্যাক করুন", "Track live")}
+                  </Link>
+                )}
+                {(o.status === "confirmed" || o.status === "processing") && (
+                  <button
+                    disabled={busy === o.id}
+                    onClick={() => void cancelOrder(o.id, o.order_no)}
+                    className="rounded-lg border border-sale px-3 py-1.5 text-xs font-semibold text-sale disabled:opacity-60"
+                  >
+                    {t("অর্ডার বাতিল", "Cancel order")}
+                  </button>
+                )}
+                {o.status === "delivered" && (
+                  <button
+                    onClick={() => setReturnFor(returnFor === o.id ? null : o.id)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold"
+                  >
+                    ↩ {t("রিটার্ন/রিফান্ড", "Return / refund")}
+                  </button>
+                )}
+              </div>
+
+              {returnFor === o.id && (
+                <div className="mt-3 rounded-lg border border-border bg-secondary/40 p-3">
+                  <p className="text-xs font-semibold">{t("রিটার্নের কারণ", "Reason for return")}</p>
+                  <select
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-border bg-background px-2 py-2 text-xs"
+                  >
+                    {REASONS.map((r) => (
+                      <option key={r.key} value={r.key}>
+                        {t(r.bn, r.en)}
+                      </option>
+                    ))}
+                  </select>
+                  <textarea
+                    value={details}
+                    onChange={(e) => setDetails(e.target.value)}
+                    rows={2}
+                    placeholder={t("বিস্তারিত লিখুন (ঐচ্ছিক)", "Add details (optional)")}
+                    className="mt-2 w-full rounded-lg border border-border bg-background p-2 text-xs"
+                  />
+                  <button
+                    disabled={busy === o.id}
+                    onClick={() => void submitReturn(o.id, o.order_no)}
+                    className="mt-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+                    {t("রিটার্ন অনুরোধ পাঠান", "Submit request")}
+                  </button>
+                </div>
+              )}
+
+              {msg?.id === o.id && <p className="mt-2 text-[11px] font-semibold text-primary">{msg.text}</p>}
+
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

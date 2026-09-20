@@ -1,0 +1,38 @@
+name: a11y
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  hero-a11y:
+    name: Hero typography + contrast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Run typography + contrast checks
+        id: a11y
+        # Don't fail the step yet — we want the summary to render either way.
+        continue-on-error: true
+        run: |
+          npm run check:typography
+          npm run check:contrast
+      - name: Append markdown reports to job summary
+        if: always()
+        run: node scripts/ci-a11y-summary.mjs
+      - name: Upload reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-reports
+          path: reports/
+      - name: Fail job if any a11y check failed
+        if: steps.a11y.outcome == 'failure'
+        run: exit 1

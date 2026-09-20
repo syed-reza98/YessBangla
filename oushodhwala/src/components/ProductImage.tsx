@@ -1,0 +1,58 @@
+import { useState } from "react";
+
+type Ratio = "square" | "wide" | "card";
+
+const RATIO: Record<Ratio, string> = {
+  square: "aspect-square",
+  wide: "aspect-[4/3]",
+  card: "aspect-[5/4]",
+};
+
+/**
+ * Uniform product image: fixed aspect ratio box + object-contain so every
+ * image (box photo, medicine strip, placeholder) occupies the exact same
+ * space — no layout shift while loading.
+ */
+export function ProductImage({
+  src,
+  alt,
+  emoji = "💊",
+  ratio = "card",
+  className = "",
+  imgClassName = "",
+  emojiClassName = "text-3xl",
+  eager = false,
+}: {
+  src?: string | null | undefined;
+  alt: string;
+  emoji?: string;
+  ratio?: Ratio;
+  className?: string;
+  imgClassName?: string;
+  emojiClassName?: string;
+  eager?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const show = src && !failed;
+  // কিছু সোর্স ছবির নিচে অন্য কোম্পানির লোগো বসানো থাকে — সেই অংশ ক্রপ করে দেওয়া হয়
+  const cropBrand = !!src && /eessentials|medeasy/i.test(src);
+  return (
+    <div className={`relative w-full overflow-hidden bg-secondary ${RATIO[ratio]} ${className}`}>
+      {show ? (
+        <img
+          src={src}
+          alt={alt}
+          width={400}
+          height={320}
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          onError={() => setFailed(true)}
+          className={`absolute inset-0 h-full w-full object-contain p-2 ${cropBrand ? "scale-[1.18] origin-top" : ""} ${imgClassName}`}
+        />
+
+      ) : (
+        <span className={`absolute inset-0 grid place-items-center ${emojiClassName}`}>{emoji}</span>
+      )}
+    </div>
+  );
+}
