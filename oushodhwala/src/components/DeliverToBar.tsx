@@ -37,6 +37,37 @@ export function DeliverToBar({ full = false }: { full?: boolean }) {
   const [draft, setDraft] = useState<PickedAddress>(emptyAddress);
   const [orderNo, setOrderNo] = useState("");
 
+  const close = useCallback(() => setOpen(false), []);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const { ref: wrapRef, triggerRef } = useDismissable(open, close);
+
+  const addr = addresses.find((a) => a.id === activeAddress) ?? addresses[0];
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(OPEN_KEY) === "1") setOpen(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(OPEN_KEY, open ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [open]);
+
+  const { data: live = [] } = useQuery({
+    queryKey: ["deliver-bar-live", user?.id],
+    enabled: !!user?.id && open,
+    refetchInterval: open ? 15_000 : false,
+    queryFn: async () => {
+      // Optional live deliveries — empty when no action wired yet
+      return [] as LiveDelivery[];
+    },
+  });
 
   const save = () => {
     if (!draft.district && !draft.details) return;

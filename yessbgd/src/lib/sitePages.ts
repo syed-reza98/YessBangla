@@ -2,34 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { resolveMediaUrl } from "@/lib/mediaAssets";
 import { getSitePageAction, listSitePagesAction } from "@/actions/cms";
+import type { SitePage } from "@/lib/sitePages.shared";
+
+export type { SitePage } from "@/lib/sitePages.shared";
+export { localised } from "@/lib/sitePages.shared";
 
 const STALE = 60_000;
-
-export type SitePage = {
-  id: string;
-  page: string;
-  path: string;
-  name: string;
-  name_bn: string | null;
-  hero_eyebrow: string | null;
-  hero_eyebrow_bn: string | null;
-  hero_title: string | null;
-  hero_title_bn: string | null;
-  hero_subtitle: string | null;
-  hero_subtitle_bn: string | null;
-  hero_image: string | null;
-  body: string | null;
-  body_bn: string | null;
-  seo_title: string | null;
-  seo_title_bn: string | null;
-  seo_description: string | null;
-  seo_description_bn: string | null;
-  og_image: string | null;
-  is_custom: boolean;
-  is_published: boolean;
-  sort_order: number | null;
-  data: Record<string, unknown> | null;
-};
 
 export const SITE_PAGE_FIELDS: {
   key: keyof SitePage;
@@ -106,9 +84,4 @@ export function usePageOverride(page: string): HeroOverride {
     body: pick(data.body, data.body_bn, isBn),
     image: data.hero_image ? resolveMediaUrl(data.hero_image, data.hero_image) : undefined,
   };
-}
-
-/** Localised label helper used by the admin list and public custom pages. */
-export function localised(en: string | null, bn: string | null, isBn: boolean) {
-  return pick(en, bn, isBn) ?? "";
 }

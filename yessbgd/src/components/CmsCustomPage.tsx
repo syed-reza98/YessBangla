@@ -2,7 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 import { PageHero } from "@/components/PageHero";
-import { localised, type SitePage } from "@/lib/sitePages";
+import { localised, type SitePage } from "@/lib/sitePages.shared";
 import type { PageSection } from "@/lib/siteContent";
 import { resolveMediaUrl } from "@/lib/mediaAssets";
 

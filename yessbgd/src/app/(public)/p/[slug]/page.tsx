@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getSitePageAction, listPageSectionsAction } from "@/actions/cms";
 import { CmsCustomPage } from "@/components/CmsCustomPage";
 import type { PageSection } from "@/lib/siteContent";
-import { localised, type SitePage } from "@/lib/sitePages";
+import { localised, type SitePage } from "@/lib/sitePages.shared";
 
 type Params = Promise<{ slug: string }>;
 

@@ -137,11 +137,11 @@ export function ApiHub() {
 
   const saveBase = useMutation({
     mutationFn: async (value: string) => {
-      const res = await upsertAppSettingAction(
-        envDef.key,
-        value.trim(),
-        `API base — ${envDef.t}`
-      );
+      const res = await upsertAppSettingByKeyAction({
+        key: envDef.key,
+        value: value.trim(),
+        label: `API base — ${envDef.t}`,
+      });
       if (!res.ok) throw new Error(res.error);
     },
     onSuccess: () => {
@@ -238,23 +238,11 @@ export function ApiHub() {
         },
       });
       setResult({ ...r, name: `${ep.name} · ${envDef.t}` });
-      // Persist last test snapshot inside headers meta (schema has no last_* columns).
-      const headers: Record<string, unknown> = {
-        ...(ep.headers ?? {}),
-        _last_test: {
-          last_status: r.status,
-          last_ok: r.ok,
-          last_ms: r.ms,
-          last_tested_at: new Date().toISOString(),
-        },
-      };
-      await upsertApiEndpointAction({
+      await markApiEndpointTestedAction({
         id: ep.id,
-        name: ep.name,
-        method: ep.method,
-        url: ep.url,
-        headers,
-        active: ep.active,
+        last_status: r.status,
+        last_ok: r.ok,
+        last_ms: r.ms,
       });
       await insertApiTestLogAction({
         endpoint_id: ep.id,
