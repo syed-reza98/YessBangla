@@ -155,4 +155,4 @@ For detailed, step-by-step instructions, see:
 
 ## 📄 License & Ownership
 
-© 2026 **Yess Bangladesh**. All rights reserved. Maintained by [@syed-reza98](https://github.com/syed-reza98).
+© 2026 **Yess Bangla**. All rights reserved. Maintained by [@syed-reza98](https://github.com/syed-reza98).

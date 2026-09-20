@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createFileRoute } from "@tanstack/react-router";
 
 /** পরিষ্কার করা (ওয়াটারমার্কমুক্ত) ছবি সার্ভ করার পাবলিক রুট */

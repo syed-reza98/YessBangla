@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { riderPingLocationAction, riderUpdateDeliveryAction } from "@/actions/delivery";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";

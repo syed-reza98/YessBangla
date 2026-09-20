@@ -1,8 +1,16 @@
-"use client";
+import type { Metadata } from "next";
+import { IndustriesPage } from "@/components/IndustriesPage";
 
-import { Route } from "@/routes/industries";
+export const metadata: Metadata = {
+  title: "Industries — YESS Bangla Private Limited",
+  description:
+    "Industries we serve: media, retail, education, healthcare, finance, manufacturing, logistics and government in Bangladesh.",
+  openGraph: {
+    title: "Industries we serve — YESS Bangla",
+    description: "Cross-industry consulting and IT solutions delivered nation-wide.",
+  },
+};
 
 export default function Page() {
-  const Component = (Route as any).component as React.ComponentType;
-  return <Component />;
+  return <IndustriesPage />;
 }

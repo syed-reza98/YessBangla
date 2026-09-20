@@ -1,8 +1,7 @@
 import { BrandLogo } from "@/components/BrandLogo";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,13 +10,16 @@ import { useI18n } from "@/lib/i18n";
 import { logAudit } from "@/lib/audit";
 import { LangToggle } from "@/components/LangToggle";
 import { signIn } from "next-auth/react";
-import { customerSignUpAction } from "@/actions/auth";
+import {
+  customerSignUpFormAction,
+  type SignUpFormState,
+} from "@/actions/auth";
 import {
   healthCheckSettingsAction,
   debugProfileAction,
 } from "@/actions/settings";
 import { useSession } from "next-auth/react";
-import { ClipboardCopy, Loader2, ShieldCheck, AlertCircle } from "lucide-react";
+import { ClipboardCopy, ShieldCheck, AlertCircle } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -31,17 +33,12 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-const schema = z.object({
-  email: z.string().trim().min(3).max(255),
-  password: z.string().min(6).max(72),
-  fullName: z.string().trim().max(80).optional(),
-});
-
 // Users can sign in with a plain username (mapped to an internal email) or a real email.
 function toEmail(value: string) {
   return value.includes("@") ? value.toLowerCase() : `${value.toLowerCase()}@yesspos.local`;
 }
 
+const initialSignUpState: SignUpFormState = { ok: false };
 
 function AuthPage() {
   const { t, lang } = useI18n();
@@ -50,35 +47,55 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<{ 
-    status: string; 
-    details?: string; 
+  const [debugBusy, setDebugBusy] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [signupState, signupAction, signupPending] = useActionState(
+    customerSignUpFormAction,
+    initialSignUpState,
+  );
+  const handledSignupRef = useRef<SignUpFormState | null>(null);
+  const [debugInfo, setDebugInfo] = useState<{
+    status: string;
+    details?: string;
     timestamp?: string;
     endpoint?: string;
     roleValue?: string;
     isError?: boolean;
   } | null>(null);
 
+  const busy = debugBusy || isPending || signupPending;
+
   const { data: session } = useSession();
   useEffect(() => {
     if (session?.user) navigate({ to: "/dashboard", replace: true });
   }, [navigate, session]);
 
+  useEffect(() => {
+    if (signupState === handledSignupRef.current) return;
+    if (!signupState.ok && !signupState.error) return;
+    handledSignupRef.current = signupState;
+    if (!signupState.ok) {
+      toast.error(signupState.error);
+      return;
+    }
+    toast.success("Account created — sign in to continue");
+    setMode("signin");
+  }, [signupState]);
+
   async function checkBackend() {
-    setBusy(true);
+    setDebugBusy(true);
     setDebugInfo(null);
     const now = new Date().toLocaleTimeString();
     try {
       const endpoint = "healthCheckSettingsAction";
       const health = await healthCheckSettingsAction();
       if (!health.ok) {
-        setDebugInfo({ 
-          status: "Backend Unreachable", 
-          details: health.error, 
+        setDebugInfo({
+          status: "Backend Unreachable",
+          details: health.error,
           endpoint,
           timestamp: now,
-          isError: true 
+          isError: true,
         });
         return;
       }
@@ -86,29 +103,29 @@ function AuthPage() {
       const username = email || "admin";
       const lookup = await debugProfileAction({ username });
       if (!lookup.ok || !lookup.profile) {
-        setDebugInfo({ 
-          status: "Account Not Found", 
+        setDebugInfo({
+          status: "Account Not Found",
           details: `No profile for "${username}".`,
           timestamp: now,
-          isError: true
+          isError: true,
         });
         return;
       }
       const userCheck = lookup.profile;
       const rolesStr = lookup.roles.join(", ") || "none";
-      
-      setDebugInfo({ 
-        status: "System Verified", 
+
+      setDebugInfo({
+        status: "System Verified",
         details: `User "${userCheck.username}" found.`,
         roleValue: rolesStr,
         timestamp: now,
-        isError: rolesStr === "none"
+        isError: rolesStr === "none",
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setDebugInfo({ status: "Error", details: msg, timestamp: now, isError: true });
     } finally {
-      setBusy(false);
+      setDebugBusy(false);
     }
   }
 
@@ -119,68 +136,56 @@ function AuthPage() {
     toast.success("Copied to clipboard");
   };
 
-  async function onSubmit(e: React.FormEvent) {
+  function onSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const parsed = schema.safeParse({ email, password, fullName });
-    if (!parsed.success) {
-      toast.error(parsed.error.issues[0].message);
+    const fd = new FormData(e.currentTarget);
+    const rawEmail = String(fd.get("email") ?? "").trim();
+    const pw = String(fd.get("password") ?? "");
+    if (rawEmail.length < 3 || pw.length < 6) {
+      toast.error("Enter a valid username/email and password");
       return;
     }
-    setBusy(true);
     setDebugInfo(null);
-    try {
-      const emailAddr = toEmail(parsed.data.email);
-      if (mode === "signup") {
-        // Public signup is always customer — staff roles are admin-provisioned only.
-        const created = await customerSignUpAction({
-          email: emailAddr,
-          password: parsed.data.password,
-          fullName: parsed.data.fullName || "",
+    startTransition(async () => {
+      try {
+        const result = await signIn("credentials", {
+          email: toEmail(rawEmail),
+          password: pw,
+          redirect: false,
         });
-        if (!created.ok) throw new Error(created.error);
-        toast.success("Account created — sign in to continue");
-        setMode("signin");
-        return;
+        if (result?.error) {
+          setDebugInfo({
+            status: "Login Failed",
+            details: "Invalid username or password.",
+            timestamp: new Date().toLocaleTimeString(),
+            isError: true,
+          });
+          throw new Error("Invalid username or password");
+        }
+        await logAudit("login", { details: "password" });
+        navigate({ to: "/dashboard", replace: true });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed");
       }
-
-      const result = await signIn("credentials", {
-        email: emailAddr,
-        password: parsed.data.password,
-        redirect: false,
-      });
-      if (result?.error) {
-        setDebugInfo({
-          status: "Login Failed",
-          details: "Invalid username or password.",
-          timestamp: new Date().toLocaleTimeString(),
-          isError: true,
-        });
-        throw new Error("Invalid username or password");
-      }
-      await logAudit("login", { details: "password" });
-      navigate({ to: "/dashboard", replace: true });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function onGoogle() {
-    setBusy(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+    startTransition(async () => {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) {
+        toast.error("Google sign-in failed");
+        return;
+      }
+      if ((result as { redirected?: boolean }).redirected) return;
+      await logAudit("login", { details: "google" });
+      navigate({ to: "/dashboard", replace: true });
     });
-    if (result.error) {
-      setBusy(false);
-      toast.error("Google sign-in failed");
-      return;
-    }
-    if ((result as any).redirected) return;
-    await logAudit("login", { details: "google" });
-    navigate({ to: "/dashboard", replace: true });
   }
 
+  const fieldErrors = signupState.fieldErrors ?? {};
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -210,7 +215,7 @@ function AuthPage() {
                   <ClipboardCopy className="h-3.5 w-3.5" />
                 </button>
               </div>
-              
+
               <div className="mt-2 space-y-1 opacity-90">
                 {debugInfo.details && <p>{debugInfo.details}</p>}
                 {debugInfo.roleValue && (
@@ -226,17 +231,32 @@ function AuthPage() {
             </div>
           )}
 
-          <form onSubmit={onSubmit} className="mt-6 space-y-4">
+          <form
+            key={mode}
+            action={mode === "signup" ? signupAction : undefined}
+            onSubmit={mode === "signin" ? onSignIn : undefined}
+            className="mt-6 space-y-4"
+          >
             {mode === "signup" && (
               <div className="space-y-1.5">
                 <Label htmlFor="fullName">{t("fullName")}</Label>
-                <Input id="fullName" value={fullName} maxLength={80} onChange={(e) => setFullName(e.target.value)} />
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  value={fullName}
+                  maxLength={80}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+                {fieldErrors.fullName && (
+                  <p className="text-xs text-destructive">{fieldErrors.fullName}</p>
+                )}
               </div>
             )}
             <div className="space-y-1.5">
               <Label htmlFor="email">{t("usernameOrEmail")}</Label>
               <Input
                 id="email"
+                name="email"
                 type="text"
                 autoComplete="username"
                 required
@@ -245,11 +265,15 @@ function AuthPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+              {mode === "signup" && fieldErrors.email && (
+                <p className="text-xs text-destructive">{fieldErrors.email}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">{t("password")}</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
                 autoComplete={mode === "signin" ? "current-password" : "new-password"}
                 required
@@ -258,8 +282,18 @@ function AuthPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              {mode === "signup" && fieldErrors.password && (
+                <p className="text-xs text-destructive">{fieldErrors.password}</p>
+              )}
             </div>
-            <Button type="submit" className="w-full" disabled={busy}>
+            {mode === "signup" && signupState.error && !Object.keys(fieldErrors).length && (
+              <p className="text-xs text-destructive">{signupState.error}</p>
+            )}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={mode === "signup" ? signupPending || debugBusy : busy}
+            >
               {mode === "signin" ? t("signIn") : t("signUp")}
             </Button>
           </form>
@@ -280,7 +314,7 @@ function AuthPage() {
             >
               {mode === "signin" ? t("noAccount") : t("haveAccount")}
             </button>
-            
+
             <button
               type="button"
               className="w-full text-center text-xs text-primary/60 underline-offset-4 hover:underline"
@@ -289,8 +323,6 @@ function AuthPage() {
             >
               {lang === "bn" ? "সিস্টেম কানেকশন ও অ্যাডমিন স্ট্যাটাস চেক করুন" : "Check system connection & admin status"}
             </button>
-
-
           </div>
         </div>
       </main>

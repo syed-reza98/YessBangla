@@ -2,7 +2,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdmin } from "@/lib/session-authz";
 
-export type Segment = { kind: string; value?: string };
+export type Segment = "all" | "buyers30" | "inactive60" | "highvalue";
 
 export const countAudience = createServerFn({ method: "POST" })
   .inputValidator((d: { segment: Segment }) => d)
@@ -12,8 +12,8 @@ export const countAudience = createServerFn({ method: "POST" })
   });
 
 export const sendCampaign = createServerFn({ method: "POST" })
-  .inputValidator((d: Record<string, unknown>) => d)
+  .inputValidator((d: { segment: Segment; title?: string; body?: string }) => d)
   .handler(async () => {
     await requireAdmin();
-    return { ok: true, sent: 0 };
+    return { ok: true as const, sent: 0 };
   });

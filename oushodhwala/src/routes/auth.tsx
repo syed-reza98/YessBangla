@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   Eye,
@@ -15,7 +15,10 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { signIn } from "next-auth/react";
-import { customerSignUpAction } from "@/actions/auth";
+import {
+  customerSignUpFormAction,
+  type SignUpFormState,
+} from "@/actions/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/lib/i18n";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -35,6 +38,8 @@ export const Route = createFileRoute("/auth")({
 
 type Mode = "signin" | "signup" | "forgot";
 
+const initialSignUpState: SignUpFormState = { ok: false };
+
 function AuthPage() {
   const t = useT();
   const { user, loading, refresh } = useAuth();
@@ -42,64 +47,76 @@ function AuthPage() {
   const [mode, setMode] = useState<Mode>("signin");
   const [form, setForm] = useState({ email: "", password: "", name: "", phone: "" });
   const [showPw, setShowPw] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<"reset" | "confirm" | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [signupState, signupAction, signupPending] = useActionState(
+    customerSignUpFormAction,
+    initialSignUpState,
+  );
+
+  const busy = isPending || signupPending;
 
   useEffect(() => {
     if (!loading && user) void navigate({ to: "/account" });
   }, [loading, user, navigate]);
 
+  useEffect(() => {
+    if (!signupState.ok) {
+      if (signupState.error) {
+        const msg = signupState.error;
+        const friendly = /already registered|user already|already exists/i.test(msg)
+          ? t("এই ইমেইলে একাউন্ট আছে — লগইন করুন", "An account with this email exists — please log in")
+          : msg || t("কিছু একটা ভুল হয়েছে", "Something went wrong");
+        toast.error(friendly);
+      }
+      return;
+    }
+    if (!signupState.userId) return;
+    toast.success(t("একাউন্ট তৈরি হয়েছে — লগইন করুন", "Account created — sign in to continue"));
+    setMode("signin");
+  }, [signupState, t]);
+
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
   const phoneOk = mode !== "signup" || /^01\d{9}$/.test(form.phone.trim());
   const pwOk = mode === "forgot" || form.password.length >= 6;
   const nameOk = mode !== "signup" || form.name.trim().length >= 2;
-  const canSubmit = emailOk && pwOk && phoneOk && nameOk && !busy;
+  const canSubmit =
+    mode === "signup"
+      ? emailOk && pwOk && phoneOk && nameOk && !signupPending
+      : emailOk && pwOk && !busy;
 
-  const submit = async () => {
+  const onSignInOrForgot = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     if (!canSubmit) return;
-    setBusy(true);
-    try {
-      if (mode === "forgot") {
-        // In-app password change requires being signed in; for forgot, prompt to contact support / use known password flow
-        toast.message(
-          t(
-            "পাসওয়ার্ড রিসেট করতে সাপোর্টে যোগাযোগ করুন, অথবা লগইন করে প্রোফাইল থেকে পরিবর্তন করুন",
-            "Contact support to reset, or change password from your profile after login",
-          ),
-        );
-        setSent("reset");
-        return;
-      }
-      if (mode === "signup") {
-        const created = await customerSignUpAction({
+    if (mode === "forgot") {
+      toast.message(
+        t(
+          "পাসওয়ার্ড রিসেট করতে সাপোর্টে যোগাযোগ করুন, অথবা লগইন করে প্রোফাইল থেকে পরিবর্তন করুন",
+          "Contact support to reset, or change password from your profile after login",
+        ),
+      );
+      setSent("reset");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const res = await signIn("credentials", {
           email: form.email.trim(),
           password: form.password,
-          name: form.name.trim(),
-          phone: form.phone.trim(),
+          redirect: false,
         });
-        if (!created.ok) throw new Error(created.error);
-        toast.success(t("একাউন্ট তৈরি হয়েছে", "Account created"));
-      }
-      const res = await signIn("credentials", {
-        email: form.email.trim(),
-        password: form.password,
-        redirect: false,
-      });
-      if (res?.error) throw new Error(res.error);
-      toast.success(t("লগইন সফল", "Login successful"));
-      await refresh();
-      void navigate({ to: "/account" });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "";
-      const friendly = /invalid login credentials/i.test(msg)
-        ? t("ইমেইল বা পাসওয়ার্ড সঠিক নয়", "Incorrect email or password")
-        : /already registered|user already/i.test(msg)
-          ? t("এই ইমেইলে একাউন্ট আছে — লগইন করুন", "An account with this email exists — please log in")
+        if (res?.error) throw new Error(res.error);
+        toast.success(t("লগইন সফল", "Login successful"));
+        await refresh();
+        void navigate({ to: "/account" });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        const friendly = /invalid login credentials/i.test(msg)
+          ? t("ইমেইল বা পাসওয়ার্ড সঠিক নয়", "Incorrect email or password")
           : msg || t("কিছু একটা ভুল হয়েছে", "Something went wrong");
-      toast.error(friendly);
-    } finally {
-      setBusy(false);
-    }
+        toast.error(friendly);
+      }
+    });
   };
 
   const title =
@@ -113,11 +130,11 @@ function AuthPage() {
   ];
 
   const field = "w-full rounded-xl border border-border bg-background px-10 py-3 text-base outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
+  const fieldErrors = signupState.fieldErrors ?? {};
 
   return (
     <div className="py-6 lg:py-12">
       <div className="mx-auto grid max-w-5xl overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-elevated)] lg:grid-cols-2">
-        {/* Brand panel */}
         <aside className="hidden flex-col justify-between bg-navy p-8 text-navy-foreground lg:flex">
           <div>
             <BrandLogo size={44} tone="light" bn={t("ঔষধওয়ালা", "Oushodhwala")} />
@@ -138,7 +155,6 @@ function AuthPage() {
           </p>
         </aside>
 
-        {/* Form panel */}
         <div className="p-6 sm:p-8">
           <div className="lg:hidden">
             <BrandLogo size={38} bn={t("ঔষধওয়ালা", "Oushodhwala")} />
@@ -156,6 +172,7 @@ function AuthPage() {
               {(["signin", "signup"] as const).map((m) => (
                 <button
                   key={m}
+                  type="button"
                   onClick={() => setMode(m)}
                   aria-pressed={mode === m}
                   className={`min-h-11 flex-1 rounded-lg px-3 ${mode === m ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}
@@ -181,6 +198,7 @@ function AuthPage() {
                   : t("ঠিকানায় একটি কনফার্মেশন লিংক পাঠিয়েছি। লিংকে ক্লিক করলেই একাউন্ট চালু হবে।", "with a confirmation link. Click it to activate your account.")}
               </p>
               <button
+                type="button"
                 onClick={() => {
                   setSent(null);
                   setMode("signin");
@@ -192,27 +210,31 @@ function AuthPage() {
             </div>
           ) : (
             <form
+              key={mode}
               className="mt-4 space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void submit();
-              }}
+              action={mode === "signup" ? signupAction : undefined}
+              onSubmit={mode !== "signup" ? onSignInOrForgot : undefined}
             >
               {mode === "signup" && (
                 <>
                   <div className="relative">
                     <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
+                      name="name"
                       value={form.name}
                       autoComplete="name"
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
                       placeholder={t("আপনার নাম", "Your full name")}
                       className={field}
                     />
+                    {fieldErrors.name && (
+                      <p className="mt-1 text-[11px] text-sale">{fieldErrors.name}</p>
+                    )}
                   </div>
                   <div className="relative">
                     <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
+                      name="phone"
                       value={form.phone}
                       inputMode="numeric"
                       autoComplete="tel"
@@ -220,9 +242,11 @@ function AuthPage() {
                       placeholder={t("মোবাইল নম্বর (01XXXXXXXXX)", "Mobile number (01XXXXXXXXX)")}
                       className={field}
                     />
-                    {form.phone && !phoneOk && (
-                      <p className="mt-1 text-[11px] text-sale">{t("১১ ডিজিটের সঠিক নম্বর দিন", "Enter a valid 11-digit number")}</p>
-                    )}
+                    {(form.phone && !phoneOk) || fieldErrors.phone ? (
+                      <p className="mt-1 text-[11px] text-sale">
+                        {fieldErrors.phone || t("১১ ডিজিটের সঠিক নম্বর দিন", "Enter a valid 11-digit number")}
+                      </p>
+                    ) : null}
                   </div>
                 </>
               )}
@@ -231,15 +255,18 @@ function AuthPage() {
                 <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="email"
+                  name="email"
                   autoComplete="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder={t("ইমেইল", "Email address")}
                   className={field}
                 />
-                {form.email && !emailOk && (
-                  <p className="mt-1 text-[11px] text-sale">{t("সঠিক ইমেইল দিন", "Enter a valid email")}</p>
-                )}
+                {(form.email && !emailOk) || (mode === "signup" && fieldErrors.email) ? (
+                  <p className="mt-1 text-[11px] text-sale">
+                    {(mode === "signup" && fieldErrors.email) || t("সঠিক ইমেইল দিন", "Enter a valid email")}
+                  </p>
+                ) : null}
               </div>
 
               {mode !== "forgot" && (
@@ -247,6 +274,7 @@ function AuthPage() {
                   <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type={showPw ? "text" : "password"}
+                    name="password"
                     autoComplete={mode === "signin" ? "current-password" : "new-password"}
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -261,9 +289,11 @@ function AuthPage() {
                   >
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
-                  {mode === "signup" && form.password && !pwOk && (
-                    <p className="mt-1 text-[11px] text-sale">{t("কমপক্ষে ৬ অক্ষর", "At least 6 characters")}</p>
-                  )}
+                  {(mode === "signup" && form.password && !pwOk) || fieldErrors.password ? (
+                    <p className="mt-1 text-[11px] text-sale">
+                      {fieldErrors.password || t("কমপক্ষে ৬ অক্ষর", "At least 6 characters")}
+                    </p>
+                  ) : null}
                 </div>
               )}
 
@@ -277,12 +307,18 @@ function AuthPage() {
                 </button>
               )}
 
+              {mode === "signup" && signupState.error && !Object.keys(fieldErrors).length && (
+                <p className="text-[11px] text-sale">{signupState.error}</p>
+              )}
+
               <button
                 type="submit"
                 disabled={!canSubmit}
                 className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-bold text-primary-foreground transition disabled:opacity-50"
               >
-                {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                {(mode === "signup" ? signupPending : busy) && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
                 {mode === "signin"
                   ? t("লগইন করুন", "Log in")
                   : mode === "signup"

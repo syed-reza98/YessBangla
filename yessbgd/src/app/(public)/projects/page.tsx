@@ -1,8 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { Route } from "@/routes/projects";
-
+/** `/projects` redirects to `/ventures` — canonical portfolio route. */
 export default function Page() {
-  const Component = (Route as any).component as React.ComponentType;
-  return <Component />;
+  redirect("/ventures");
 }

@@ -1,8 +1,19 @@
-"use client";
+import type { Metadata } from "next";
+import { InsightsPage } from "@/components/InsightsPage";
 
-import { Route } from "@/routes/insights";
+export const metadata: Metadata = {
+  title: "Insights & Blog — YESS Bangla",
+  description:
+    "Articles, case studies and industry insights from YESS Bangla's consultants and engineers.",
+  openGraph: {
+    title: "Insights — YESS Bangla",
+    description: "Latest thinking on business strategy and technology in Bangladesh.",
+    type: "website",
+    url: "https://yessbangla.com/insights",
+  },
+  alternates: { canonical: "https://yessbangla.com/insights" },
+};
 
 export default function Page() {
-  const Component = (Route as any).component as React.ComponentType;
-  return <Component />;
+  return <InsightsPage />;
 }

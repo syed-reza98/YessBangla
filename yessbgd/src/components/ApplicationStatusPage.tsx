@@ -2,9 +2,12 @@
 
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { z } from "zod";
-import { lookupApplicationAction } from "@/actions/public";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lookupApplicationAction,
+  lookupApplicationFormAction,
+  type LookupFormState,
+} from "@/actions/public";
 import { PageHero } from "@/components/PageHero";
 import { Check, Search, Loader2, AlertCircle, ArrowRight, Clock, RefreshCw, Wifi, WifiOff } from "lucide-react";
 
@@ -71,10 +74,42 @@ const STATUS_BADGE: Record<Status, string> = {
   Reviewed: "border-primary/30 bg-primary/10 text-primary",
 };
 
-const lookupSchema = z.object({
-  ref: z.string().trim().min(4, "Reference must be at least 4 characters").max(64),
-  email: z.string().trim().email("Enter a valid email"),
-});
+type ErrKind = "validation" | "network" | "server" | "notfound";
+
+const initialLookupState: LookupFormState = { ok: false };
+
+/** Client wrapper: offline gate, then FormData Server Action. */
+async function lookupFormAction(
+  prev: LookupFormState,
+  formData: FormData,
+): Promise<LookupFormState> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return {
+      ok: false,
+      error: "You're offline.|Reconnect to the internet and try again.|network",
+    };
+  }
+  return lookupApplicationFormAction(prev, formData);
+}
+
+function classifyActionError(message: string): {
+  kind: ErrKind;
+  message: string;
+  detail?: string;
+} {
+  const parts = message.split("|");
+  if (parts.length >= 3 && parts[2] === "network") {
+    return { kind: "network", message: parts[0]!, detail: parts[1] };
+  }
+  if (/enter a valid email|reference must be/i.test(message)) {
+    return { kind: "validation", message };
+  }
+  const isNet = /fetch|network|failed to fetch|networkerror|timeout|offline/i.test(message);
+  if (isNet) {
+    return { kind: "network", message: "Network problem reaching the server.", detail: message };
+  }
+  return { kind: "server", message: "The server couldn't process this lookup.", detail: message };
+}
 
 function readSavedLookup(): { ref: string; email: string } | null {
   if (typeof window === "undefined") return null;
@@ -91,6 +126,22 @@ function readSavedLookup(): { ref: string; email: string } | null {
   return null;
 }
 
+function persistLookup(parsedRef: string, parsedEmail: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      "yess:lastApplication",
+      JSON.stringify({
+        ref: parsedRef,
+        email: parsedEmail,
+        savedAt: Date.now(),
+      }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 export function ApplicationStatusPage({
   initialRef,
   initialEmail,
@@ -104,15 +155,16 @@ export function ApplicationStatusPage({
   const [ref, setRef] = useState(sp.ref ?? saved?.ref ?? "");
   const [email, setEmail] = useState(sp.email ?? saved?.email ?? "");
   const autofilled = !sp.ref && !sp.email && !!saved;
-  const [loading, setLoading] = useState(false);
+  const [state, formAction, pending] = useActionState(lookupFormAction, initialLookupState);
   const [refreshing, setRefreshing] = useState(false);
-  type ErrKind = "validation" | "network" | "server" | "notfound";
   const [error, setError] = useState<{ kind: ErrKind; message: string; detail?: string } | null>(null);
   const [app, setApp] = useState<Application | null>(null);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const [flash, setFlash] = useState(false);
   const prevSigRef = useRef<string | null>(null);
+  const sawPendingRef = useRef(false);
+  const autoStartedRef = useRef(false);
 
   const runLookup = async (
     parsedRef: string,
@@ -160,27 +212,30 @@ export function ApplicationStatusPage({
     }
   };
 
-  const lookup = async (evt?: FormEvent) => {
-    evt?.preventDefault();
-    setError(null);
-    setApp(null);
-    prevSigRef.current = null;
-    const parsed = lookupSchema.safeParse({ ref, email });
-    if (!parsed.success) {
-      setError({
-        kind: "validation",
-        message: parsed.error.issues[0]?.message ?? "Please check your inputs.",
-      });
+  const submitLookup = (parsedRef = ref, parsedEmail = email) => {
+    const fd = new FormData();
+    fd.set("ref", parsedRef);
+    fd.set("email", parsedEmail);
+    formAction(fd);
+  };
+
+  useEffect(() => {
+    if (pending) {
+      sawPendingRef.current = true;
+      setError(null);
+      setApp(null);
+      prevSigRef.current = null;
       return;
     }
-    setLoading(true);
-    const { row, error: err } = await runLookup(parsed.data.ref, parsed.data.email);
-    setLoading(false);
+    if (!sawPendingRef.current) return;
+    sawPendingRef.current = false;
     setLastChecked(new Date());
-    if (err) {
-      setError(err);
+
+    if (!state.ok) {
+      if (state.error) setError(classifyActionError(state.error));
       return;
     }
+    const row = (state.data as Application | null) ?? null;
     if (!row) {
       setError({
         kind: "notfound",
@@ -191,22 +246,8 @@ export function ApplicationStatusPage({
     }
     prevSigRef.current = `${row.status}|${row.status_updated_at}`;
     setApp(row);
-    // Persist for next visit
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(
-          "yess:lastApplication",
-          JSON.stringify({
-            ref: parsed.data.ref,
-            email: parsed.data.email,
-            savedAt: Date.now(),
-          }),
-        );
-      } catch {
-        /* ignore */
-      }
-    }
-  };
+    persistLookup(ref, email);
+  }, [pending, state, ref, email]);
 
   const clearSaved = () => {
     if (typeof window !== "undefined") {
@@ -241,8 +282,10 @@ export function ApplicationStatusPage({
   };
 
   useEffect(() => {
+    if (autoStartedRef.current) return;
     if ((sp.ref && sp.email) || (saved && ref && email)) {
-      lookup();
+      autoStartedRef.current = true;
+      submitLookup(ref, email);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -287,13 +330,14 @@ export function ApplicationStatusPage({
       />
       <section className="pb-24">
         <div className="container-tight max-w-3xl">
-          <form onSubmit={lookup} className="rounded-2xl glass-card p-5 sm:p-6">
+          <form action={formAction} className="rounded-2xl glass-card p-5 sm:p-6">
             <div className="grid gap-3 sm:grid-cols-[1fr_1.2fr_auto]">
               <div>
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Reference ID
                 </label>
                 <input
+                  name="ref"
                   value={ref}
                   onChange={(e) => setRef(e.target.value.toUpperCase())}
                   placeholder="e.g. A1B2C3D4"
@@ -305,6 +349,7 @@ export function ApplicationStatusPage({
                   Email
                 </label>
                 <input
+                  name="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -315,10 +360,10 @@ export function ApplicationStatusPage({
               <div className="flex items-end">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={pending}
                   className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 text-sm font-semibold text-primary-foreground shadow-glow disabled:opacity-60 sm:w-auto"
                 >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   Track
                 </button>
               </div>
@@ -376,11 +421,11 @@ export function ApplicationStatusPage({
                     {canRetry && (
                       <button
                         type="button"
-                        onClick={() => lookup()}
-                        disabled={loading}
+                        onClick={() => submitLookup()}
+                        disabled={pending}
                         className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-current bg-background/60 px-3 py-1 font-semibold hover:bg-background disabled:opacity-60"
                       >
-                        <RefreshCw className={"h-3 w-3 " + (loading ? "animate-spin" : "")} />
+                        <RefreshCw className={"h-3 w-3 " + (pending ? "animate-spin" : "")} />
                         Try again
                       </button>
                     )}
@@ -390,7 +435,7 @@ export function ApplicationStatusPage({
             })()}
           </form>
 
-          {loading && !app && (
+          {pending && !app && (
             <div className="mt-6 rounded-3xl glass-card p-6 sm:p-8" aria-busy="true" aria-live="polite">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-2">

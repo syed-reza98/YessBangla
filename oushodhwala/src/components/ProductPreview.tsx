@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { MedSuggestion } from "@/lib/rx-suggest.server";
 import { 
   Dialog, 

@@ -10,6 +10,47 @@ export type SignupResult =
   | { ok: true; userId: string }
   | { ok: false; error: string; status?: number };
 
+export type SignUpFormState = {
+  ok: boolean;
+  error?: string;
+  userId?: string;
+  fieldErrors?: Partial<Record<"email" | "password" | "fullName", string>>;
+};
+
+/** Map username-or-email input to the internal credentials email. */
+function toAuthEmail(value: string) {
+  const v = value.trim();
+  return v.includes("@") ? v.toLowerCase() : `${v.toLowerCase()}@yesspos.local`;
+}
+
+/** FormData entry for React 19 `useActionState` signup forms. */
+export async function customerSignUpFormAction(
+  _prev: SignUpFormState,
+  formData: FormData
+): Promise<SignUpFormState> {
+  const rawEmail = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const fullName = String(formData.get("fullName") ?? "").trim();
+
+  const fieldErrors: SignUpFormState["fieldErrors"] = {};
+  if (rawEmail.length < 3) fieldErrors.email = "Enter a username or email";
+  if (password.length < 6) fieldErrors.password = "Password must be at least 6 characters";
+  if (fullName.length > 80) fieldErrors.fullName = "Name is too long";
+  if (Object.keys(fieldErrors).length > 0) {
+    return { ok: false, fieldErrors };
+  }
+
+  const result = await customerSignUpAction({
+    email: toAuthEmail(rawEmail),
+    password,
+    fullName: fullName || undefined,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+  return { ok: true, userId: result.userId };
+}
+
 /** Public storefront signup — always role `customer`. */
 export async function customerSignUpAction(input: {
   email: string;

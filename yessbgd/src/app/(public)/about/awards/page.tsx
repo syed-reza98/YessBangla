@@ -1,8 +1,16 @@
-"use client";
+import type { Metadata } from "next";
+import { AboutAwardsPage } from "@/components/AboutAwardsPage";
 
-import { Route } from "@/routes/about.awards";
+export const metadata: Metadata = {
+  title: "Awards & Recognition — YESS Bangla",
+  description:
+    "Awards, partnerships and certifications recognising YESS Bangla's craft and delivery.",
+  openGraph: {
+    title: "Awards & Recognition — YESS Bangla",
+    description: "A snapshot of recognition our team has earned along the way.",
+  },
+};
 
 export default function Page() {
-  const Component = (Route as any).component as React.ComponentType;
-  return <Component />;
+  return <AboutAwardsPage />;
 }

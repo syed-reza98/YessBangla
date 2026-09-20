@@ -1,6 +1,6 @@
 /**
  * Shared authorization helpers for legacy server-function callers.
- * Role checks use Drizzle + user_roles (no db-client shim).
+ * Role checks use Drizzle + user_roles (Auth.js session + Drizzle).
  */
 
 import { and, eq } from "drizzle-orm";

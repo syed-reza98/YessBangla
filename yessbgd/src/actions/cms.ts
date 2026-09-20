@@ -926,23 +926,29 @@ export async function getDashboardStatsAction(): Promise<
 > {
   try {
     await requireEditor();
-    const [appC] = await db.select({ c: count() }).from(jobApplications);
-    const [msgC] = await db.select({ c: count() }).from(contactMessages);
-    const recentApps = await db
-      .select()
-      .from(jobApplications)
-      .orderBy(desc(jobApplications.createdAt))
-      .limit(5);
-    const recentMsgs = await db
-      .select()
-      .from(contactMessages)
-      .orderBy(desc(contactMessages.createdAt))
-      .limit(5);
+    const [[appC], [msgC], recentApps, recentMsgs, ...cmsRows] = await Promise.all([
+      db.select({ c: count() }).from(jobApplications),
+      db.select({ c: count() }).from(contactMessages),
+      db
+        .select()
+        .from(jobApplications)
+        .orderBy(desc(jobApplications.createdAt))
+        .limit(5),
+      db
+        .select()
+        .from(contactMessages)
+        .orderBy(desc(contactMessages.createdAt))
+        .limit(5),
+      ...Object.values(CMS_TABLE).map((table) =>
+        db.select({ c: count() }).from(table)
+      ),
+    ]);
+    const cmsKeys = Object.keys(CMS_TABLE);
     const cmsCounts: Record<string, number> = {};
-    for (const [key, table] of Object.entries(CMS_TABLE)) {
-      const [row] = await db.select({ c: count() }).from(table);
+    cmsKeys.forEach((key, i) => {
+      const row = cmsRows[i]?.[0] as { c: number } | undefined;
       cmsCounts[key] = Number(row?.c ?? 0);
-    }
+    });
     return {
       ok: true,
       appCount: Number(appC?.c ?? 0),

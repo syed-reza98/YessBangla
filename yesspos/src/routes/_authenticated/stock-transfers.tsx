@@ -13,7 +13,6 @@ import { listStockTransfersAction, createStockTransferAction } from "@/actions/i
 import { num, useI18n } from "@/lib/i18n";
 import { logAudit } from "@/lib/audit";
 import { useBranches } from "@/lib/use-branch";
-import { createStockTransferAction } from "@/actions/inventory";
 
 export const Route = createFileRoute("/_authenticated/stock-transfers")({
   head: () => ({
@@ -31,6 +30,30 @@ export const Route = createFileRoute("/_authenticated/stock-transfers")({
 
 type Line = { product_id: string; name: string; qty: string };
 
+type ProductOption = {
+  id: string;
+  name_en?: string | null;
+  name_bn?: string | null;
+  sku?: string | null;
+};
+
+type TransferItem = {
+  id: string;
+  product_id: string;
+  quantity: number;
+  name_snapshot: string;
+};
+
+type TransferRow = {
+  id: string;
+  from_branch_id: string;
+  to_branch_id: string;
+  note: string | null;
+  status: string;
+  transfer_date: string | Date;
+  stock_transfer_items: TransferItem[];
+};
+
 function StockTransfersPage() {
   const { t, lang } = useI18n();
   const qc = useQueryClient();
@@ -47,7 +70,7 @@ function StockTransfersPage() {
     queryFn: async () => {
       const res = await listProductsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as ProductOption[];
     },
   });
 
@@ -56,7 +79,7 @@ function StockTransfersPage() {
     queryFn: async () => {
       const res = await listStockTransfersAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return (res.rows ?? []) as TransferRow[];
     },
   });
 
@@ -64,7 +87,9 @@ function StockTransfersPage() {
 
   const productName = useMemo(() => {
     const map = new Map<string, string>();
-    for (const p of products.data ?? []) map.set(p.id, lang === "bn" ? p.name_bn : p.name_en);
+    for (const p of products.data ?? []) {
+      map.set(p.id, String(lang === "bn" ? p.name_bn ?? p.name_en ?? "" : p.name_en ?? p.name_bn ?? ""));
+    }
     return map;
   }, [products.data, lang]);
 
@@ -134,24 +159,30 @@ function StockTransfersPage() {
             </tr>
           </thead>
           <tbody>
-            {(transfers.data ?? []).map((tr) => (
-              <tr key={tr.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3">{tr.transfer_date}</td>
-                <td className="px-4 py-3">{branchName(tr.from_branch_id)}</td>
-                <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1">
-                    <ArrowRightLeft className="size-3 text-muted-foreground" />
-                    {branchName(tr.to_branch_id)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {((tr.stock_transfer_items as any[]) ?? [])
-                    .map((i: any) => `${i.name_snapshot} × ${num(i.quantity, lang)}`)
-                    .join(", ") || "—"}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{tr.note ?? "—"}</td>
-              </tr>
-            ))}
+            {(transfers.data ?? []).map((tr) => {
+              const when =
+                tr.transfer_date instanceof Date
+                  ? tr.transfer_date.toISOString().slice(0, 10)
+                  : String(tr.transfer_date).slice(0, 10);
+              return (
+                <tr key={tr.id} className="border-b border-border last:border-0">
+                  <td className="px-4 py-3">{when}</td>
+                  <td className="px-4 py-3">{branchName(tr.from_branch_id)}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1">
+                      <ArrowRightLeft className="size-3 text-muted-foreground" />
+                      {branchName(tr.to_branch_id)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {(tr.stock_transfer_items ?? [])
+                      .map((i) => `${i.name_snapshot} × ${num(i.quantity, lang)}`)
+                      .join(", ") || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{tr.note ?? "—"}</td>
+                </tr>
+              );
+            })}
             {(transfers.data ?? []).length === 0 && (
               <tr>
                 <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
@@ -208,7 +239,7 @@ function StockTransfersPage() {
                 <SelectContent>
                   {(products.data ?? []).map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {(lang === "bn" ? p.name_bn : p.name_en) + ` · ${p.sku}`}
+                      {(lang === "bn" ? p.name_bn : p.name_en) + ` · ${p.sku ?? ""}`}
                     </SelectItem>
                   ))}
                 </SelectContent>

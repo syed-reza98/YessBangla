@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@tanstack/react-router";
-import { useActionState, useEffect, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import {
   submitJobApplicationFormAction,
@@ -73,70 +73,53 @@ const applicationSchema = z.object({
 
 type Errors = Partial<Record<keyof z.infer<typeof applicationSchema> | "resume", string>>;
 
-const initialApplyState: JobApplyFormState = { ok: false };
+type ApplyFormState = JobApplyFormState & { fieldErrors?: Errors };
+
+const initialState: ApplyFormState = { ok: false };
+
+function validateResume(file: File | null): string | null {
+  if (!file) return "Please attach your CV / resume (PDF, DOC, or DOCX).";
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const extOk = ["pdf", "doc", "docx"].includes(ext);
+  const typeOk = ALLOWED_TYPES.includes(file.type);
+  if (!extOk && !typeOk) {
+    return `Unsupported file type${ext ? ` (.${ext})` : ""}. Please upload a PDF, DOC, or DOCX file.`;
+  }
+  if (file.size === 0) {
+    return "This file appears to be empty. Please choose a different file.";
+  }
+  if (file.size > MAX_RESUME_BYTES) {
+    const mb = (file.size / (1024 * 1024)).toFixed(2);
+    return `File is too large (${mb} MB). Maximum allowed size is 5 MB.`;
+  }
+  return null;
+}
 
 export function CareersApplyPage({ job }: { job: Opening }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [resume, setResume] = useState<File | null>(null);
-  const [errors, setErrors] = useState<Errors>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [localErrors, setLocalErrors] = useState<Errors>({});
 
-  const boundAction = async (prev: JobApplyFormState, formData: FormData) => {
+  const applyAction = async (
+    prev: ApplyFormState,
+    formData: FormData,
+  ): Promise<ApplyFormState> => {
     formData.set("jobSlug", job.slug);
     formData.set("jobTitle", job.title);
-    if (resume) formData.set("resume", resume);
-    return submitJobApplicationFormAction(prev, formData);
-  };
 
-  const [state, formAction, pending] = useActionState(
-    boundAction,
-    initialApplyState
-  );
-
-  useEffect(() => {
-    if (state.ok) setSubmitted(true);
-    else if (state.error) setErrors({ resume: state.error });
-  }, [state]);
-
-  const validateResume = (file: File | null): string | null => {
-    if (!file) return "Please attach your CV / resume (PDF, DOC, or DOCX).";
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const extOk = ["pdf", "doc", "docx"].includes(ext);
-    const typeOk = ALLOWED_TYPES.includes(file.type);
-    if (!extOk && !typeOk) {
-      return `Unsupported file type${ext ? ` (.${ext})` : ""}. Please upload a PDF, DOC, or DOCX file.`;
-    }
-    if (file.size === 0) {
-      return "This file appears to be empty. Please choose a different file.";
-    }
-    if (file.size > MAX_RESUME_BYTES) {
-      const mb = (file.size / (1024 * 1024)).toFixed(2);
-      return `File is too large (${mb} MB). Maximum allowed size is 5 MB.`;
-    }
-    return null;
-  };
-
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
-    setResume(f);
-    const err = validateResume(f);
-    setErrors((prev) => ({ ...prev, resume: err ?? undefined }));
-  };
-
-  const onValidate = (e: FormEvent<HTMLFormElement>) => {
-    setErrors({});
-    const fd = new FormData(e.currentTarget);
     const raw = {
-      fullName: String(fd.get("fullName") ?? ""),
-      email: String(fd.get("email") ?? ""),
-      phone: String(fd.get("phone") ?? ""),
-      linkedin: String(fd.get("linkedin") ?? ""),
-      coverLetter: String(fd.get("coverLetter") ?? ""),
+      fullName: String(formData.get("fullName") ?? ""),
+      email: String(formData.get("email") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
+      linkedin: String(formData.get("linkedin") ?? ""),
+      coverLetter: String(formData.get("coverLetter") ?? ""),
     };
     const parsed = applicationSchema.safeParse(raw);
-    const resumeErr = validateResume(resume);
+    const resumeFile = formData.get("resume");
+    const resumeErr = validateResume(resumeFile instanceof File ? resumeFile : null);
 
     if (!parsed.success || resumeErr) {
-      e.preventDefault();
       const fieldErrors: Errors = {};
       if (!parsed.success) {
         for (const issue of parsed.error.issues) {
@@ -145,8 +128,33 @@ export function CareersApplyPage({ job }: { job: Opening }) {
         }
       }
       if (resumeErr) fieldErrors.resume = resumeErr;
-      setErrors(fieldErrors);
+      return { ok: false, fieldErrors };
     }
+
+    return submitJobApplicationFormAction(prev, formData);
+  };
+
+  const [state, formAction, pending] = useActionState(applyAction, initialState);
+  const [submitted, setSubmitted] = useState(false);
+  const errors: Errors = {
+    ...localErrors,
+    ...(state.fieldErrors ?? {}),
+    ...(state.error && !state.fieldErrors ? { resume: state.error } : {}),
+  };
+
+  useEffect(() => {
+    if (state.ok) {
+      setSubmitted(true);
+      formRef.current?.reset();
+      setResume(null);
+    }
+  }, [state]);
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setResume(f);
+    const err = validateResume(f);
+    setLocalErrors((prev) => ({ ...prev, resume: err ?? undefined }));
   };
 
   if (submitted) {
@@ -194,13 +202,7 @@ export function CareersApplyPage({ job }: { job: Opening }) {
 
       <section className="pb-24">
         <div className="container-tight grid gap-10 lg:grid-cols-[1fr_360px]">
-          {/* Form */}
-          <form
-            action={formAction}
-            onSubmit={onValidate}
-            noValidate
-            className="rounded-2xl glass-card p-6 sm:p-8"
-          >
+          <form ref={formRef} action={formAction} noValidate className="rounded-2xl glass-card p-6 sm:p-8">
             <h2 className="font-display text-xl font-semibold">Your details</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               All fields marked * are required. Your information is used only to evaluate this application.
@@ -267,7 +269,6 @@ export function CareersApplyPage({ job }: { job: Opening }) {
               </Field>
             </div>
 
-            {/* File upload */}
             <div className="mt-5">
               <label className="text-sm font-medium">Resume / CV *</label>
               <p className="mt-1 text-xs text-muted-foreground">PDF or Word — up to 5 MB.</p>
@@ -287,7 +288,8 @@ export function CareersApplyPage({ job }: { job: Opening }) {
                       type="button"
                       onClick={() => {
                         setResume(null);
-                        setErrors((p) => ({ ...p, resume: undefined }));
+                        setLocalErrors((p) => ({ ...p, resume: undefined }));
+                        if (fileInputRef.current) fileInputRef.current.value = "";
                       }}
                       className="grid h-8 w-8 place-items-center rounded-full border border-border text-muted-foreground hover:text-foreground"
                       aria-label="Remove file"
@@ -309,6 +311,7 @@ export function CareersApplyPage({ job }: { job: Opening }) {
                   </label>
                 )}
                 <input
+                  ref={fileInputRef}
                   id="resume"
                   name="resume"
                   type="file"
@@ -326,10 +329,10 @@ export function CareersApplyPage({ job }: { job: Opening }) {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={pending}
               className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-glow transition-opacity disabled:opacity-60 sm:w-auto"
             >
-              {submitting ? "Submitting…" : "Submit application"}
+              {pending ? "Submitting…" : "Submit application"}
             </button>
 
             <p className="mt-4 text-xs text-muted-foreground">
@@ -341,7 +344,6 @@ export function CareersApplyPage({ job }: { job: Opening }) {
             </p>
           </form>
 
-          {/* Job summary */}
           <aside className="space-y-6">
             <div className="rounded-2xl glass-card p-6">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">

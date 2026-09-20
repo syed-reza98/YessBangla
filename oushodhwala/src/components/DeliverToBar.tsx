@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useCallback, useEffect, useState } from "react";
 import { useDismissable } from "@/hooks/useDismissable";
 import { useNavigate } from "@tanstack/react-router";

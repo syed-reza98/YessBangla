@@ -45,17 +45,17 @@ UPDATE profiles SET branch_id='bb000001-0000-0000-0000-000000000002' WHERE id='a
 -- ============================================================
 -- Categories
 -- ============================================================
-INSERT IGNORE INTO categories (id, name, slug, icon, sort_order, is_active) VALUES
-  ('cc000001-0000-0000-0000-000000000001', 'Groceries & Staples',   'groceries',   'ShoppingBasket', 1,  1),
-  ('cc000001-0000-0000-0000-000000000002', 'Beverages',             'beverages',   'Coffee',         2,  1),
-  ('cc000001-0000-0000-0000-000000000003', 'Snacks & Confectionery','snacks',      'Cookie',         3,  1),
-  ('cc000001-0000-0000-0000-000000000004', 'Dairy & Eggs',          'dairy',       'Milk',           4,  1),
-  ('cc000001-0000-0000-0000-000000000005', 'Personal Care',         'personal-care','Droplets',      5,  1),
-  ('cc000001-0000-0000-0000-000000000006', 'Household Cleaning',    'household',   'Sparkles',       6,  1),
-  ('cc000001-0000-0000-0000-000000000007', 'Fresh Produce',         'fresh',       'Leaf',           7,  1),
-  ('cc000001-0000-0000-0000-000000000008', 'Frozen Foods',          'frozen',      'Snowflake',      8,  1),
-  ('cc000001-0000-0000-0000-000000000009', 'Baby & Kids',           'baby',        'Baby',           9,  1),
-  ('cc000001-0000-0000-0000-000000000010', 'Stationery & Office',   'stationery',  'PenLine',        10, 1);
+INSERT IGNORE INTO categories (id, name, name_bn, slug, icon, sort_order, is_active) VALUES
+  ('cc000001-0000-0000-0000-000000000001', 'Groceries & Staples',   'মুদি ও নিত্যপণ্য',          'groceries',   'ShoppingBasket', 1,  1),
+  ('cc000001-0000-0000-0000-000000000002', 'Beverages',             'পানীয় ও জুস',              'beverages',   'Coffee',         2,  1),
+  ('cc000001-0000-0000-0000-000000000003', 'Snacks & Confectionery','স্ন্যাকস ও বিস্কুট',        'snacks',      'Cookie',         3,  1),
+  ('cc000001-0000-0000-0000-000000000004', 'Dairy & Eggs',          'দুধ ও ডিম',                 'dairy',       'Milk',           4,  1),
+  ('cc000001-0000-0000-0000-000000000005', 'Personal Care',         'ব্যক্তিগত যত্ন',             'personal-care','Droplets',      5,  1),
+  ('cc000001-0000-0000-0000-000000000006', 'Household Cleaning',    'গৃহস্থালি ও পরিচ্ছন্নতা',    'household',   'Sparkles',       6,  1),
+  ('cc000001-0000-0000-0000-000000000007', 'Fresh Produce',         'তাজা শাকসবজি ও ফল',         'fresh',       'Leaf',           7,  1),
+  ('cc000001-0000-0000-0000-000000000008', 'Frozen Foods',          'হিমায়িত খাবার',            'frozen',      'Snowflake',      8,  1),
+  ('cc000001-0000-0000-0000-000000000009', 'Baby & Kids',           'শিশুর খাদ্য ও যত্ন',        'baby',        'Baby',           9,  1),
+  ('cc000001-0000-0000-0000-000000000010', 'Stationery & Office',   'স্টেশনারি ও অফিস',          'stationery',  'PenLine',        10, 1);
 
 -- ============================================================
 -- Products (25 realistic Bangladeshi retail items)

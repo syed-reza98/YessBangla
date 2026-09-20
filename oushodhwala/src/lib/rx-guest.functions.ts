@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use server";
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";

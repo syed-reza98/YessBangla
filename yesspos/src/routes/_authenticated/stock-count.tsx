@@ -28,6 +28,13 @@ export const Route = createFileRoute("/_authenticated/stock-count")({
 
 type Line = { product_id: string; name: string; system_qty: number; counted_qty: string };
 
+type CountRow = {
+  id: string;
+  status: string;
+  notes?: string | null;
+  created_at?: string | Date | null;
+};
+
 function StockCountPage() {
   const { t, lang } = useI18n();
   const queryClient = useQueryClient();
@@ -68,7 +75,7 @@ function StockCountPage() {
     queryFn: async () => {
       const res = await listStockCountsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return (res.rows ?? []) as CountRow[];
     },
   });
 
@@ -76,9 +83,10 @@ function StockCountPage() {
     const p = products.data?.find((x) => x.id === productId);
     if (!p || lines.some((l) => l.product_id === productId)) return;
     const sys = stock.data?.get(productId) ?? Number(p.stock ?? 0);
+    const name = lang === "bn" ? (p.name_bn ?? p.name_en ?? "") : (p.name_en ?? p.name_bn ?? "");
     setLines((ls) => [
       ...ls,
-      { product_id: p.id, name: lang === "bn" ? p.name_bn : p.name_en, system_qty: sys, counted_qty: String(sys) },
+      { product_id: p.id, name, system_qty: sys, counted_qty: String(sys) },
     ]);
     setPicker("");
   }
@@ -144,23 +152,31 @@ function StockCountPage() {
                 </td>
               </tr>
             )}
-            {(counts.data ?? []).map((c) => (
-              <tr key={c.id} className="border-t border-border">
-                <td className="px-3 py-2">{c.count_date}</td>
-                <td className="px-3 py-2 text-muted-foreground">{c.note ?? ""}</td>
-                <td className="px-3 py-2">
-                  <span
-                    className={
-                      c.status === "completed"
-                        ? "rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success"
-                        : "rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"
-                    }
-                  >
-                    {c.status === "completed" ? t("countCompleted") : t("draft")}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {(counts.data ?? []).map((c) => {
+              const when =
+                c.created_at instanceof Date
+                  ? c.created_at.toISOString().slice(0, 10)
+                  : c.created_at
+                    ? String(c.created_at).slice(0, 10)
+                    : "—";
+              return (
+                <tr key={c.id} className="border-t border-border">
+                  <td className="px-3 py-2">{when}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{c.notes ?? ""}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={
+                        c.status === "completed"
+                          ? "rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success"
+                          : "rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"
+                      }
+                    >
+                      {c.status === "completed" ? t("countCompleted") : t("draft")}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

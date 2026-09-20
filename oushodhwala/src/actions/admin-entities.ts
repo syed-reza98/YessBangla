@@ -782,14 +782,45 @@ export async function deleteApiEndpointAction(id: string) {
 export async function insertApiTestLogAction(input: Record<string, unknown>) {
   try {
     await requireStaff();
+    const excerpt =
+      String(input.response_excerpt || input.response_body || "").slice(0, 8000) || null;
     await db.insert(apiTestLogs).values({
       id: crypto.randomUUID(),
       endpointId: String(input.endpoint_id || ""),
       statusCode: Number(input.status_code) || null,
-      responseBody: String(input.response_body || "").slice(0, 8000) || null,
+      responseBody: excerpt,
       durationMs: Number(input.duration_ms) || null,
     });
     return { ok: true as const };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function listApiTestLogsAction(limit = 50) {
+  try {
+    await requireStaff();
+    const rows = await db
+      .select()
+      .from(apiTestLogs)
+      .orderBy(desc(apiTestLogs.createdAt))
+      .limit(Math.min(Math.max(limit, 1), 200));
+    return {
+      ok: true as const,
+      data: rows.map((r) => ({
+        id: r.id,
+        endpoint_id: r.endpointId,
+        name: r.endpointId,
+        method: "",
+        url: "",
+        status_code: r.statusCode,
+        ok: r.statusCode != null && r.statusCode >= 200 && r.statusCode < 400,
+        duration_ms: r.durationMs ?? 0,
+        response_excerpt: r.responseBody ?? "",
+        error: "",
+        created_at: r.createdAt?.toISOString?.() ?? String(r.createdAt ?? ""),
+      })),
+    };
   } catch (err) {
     return fail(err);
   }

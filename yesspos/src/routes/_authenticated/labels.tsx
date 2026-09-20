@@ -43,6 +43,15 @@ function Barcode({ value }: { value: string }) {
   return <svg ref={ref} className="mx-auto" />;
 }
 
+type LabelProduct = {
+  id: string;
+  name_en?: string | null;
+  name_bn?: string | null;
+  barcode?: string | null;
+  sku?: string | null;
+  price?: number | string | null;
+};
+
 function LabelsPage() {
   const { t, lang } = useI18n();
   const [productId, setProductId] = useState("");
@@ -53,19 +62,19 @@ function LabelsPage() {
     queryFn: async () => {
       const res = await listProductsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as LabelProduct[];
     },
   });
 
   const product = products.data?.find((p) => p.id === productId) ?? null;
-  const code = product?.barcode?.trim() || product?.sku || "";
+  const code = String(product?.barcode ?? "").trim() || String(product?.sku ?? "");
   const qty = Math.min(Math.max(Number(count) || 1, 1), 120);
   const shopName = useQuery({
     queryKey: ["business-settings"],
     queryFn: async () => {
       const res = await getBusinessSettingsAction();
       const data = res.ok ? res.settings : null;
-      return data?.shop_name ?? "";
+      return String(data?.shop_name ?? "");
     },
   });
 

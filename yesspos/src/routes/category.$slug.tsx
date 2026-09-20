@@ -22,7 +22,7 @@ import { z } from "zod";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LangToggle } from "@/components/LangToggle";
 import { CustomerAccountMenu } from "@/components/CustomerAccountMenu";
-import { StorefrontNav } from "@/components/StorefrontNav";
+import { StorefrontNav, type NavCategory } from "@/components/StorefrontNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listCategoriesAction, listProductsAction } from "@/actions/catalog";
@@ -119,8 +119,7 @@ function CategoryPage() {
     queryFn: async () => {
       const __cat = await listCategoriesAction();
       if (!__cat.ok) throw new Error(__cat.error);
-      const data = __cat.rows; const error = null;
-      return data ?? [];
+      return (__cat.rows ?? []) as NavCategory[];
     },
   });
 

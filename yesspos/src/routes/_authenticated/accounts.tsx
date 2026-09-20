@@ -52,6 +52,26 @@ const emptyAccount = {
 
 const emptyTxn = { type: "deposit", account_id: "", to_account_id: "", amount: "0", note: "", txn_date: "" };
 
+type CashAccount = {
+  id: string;
+  name: string;
+  type: string;
+  bank_name?: string | null;
+  branch?: string | null;
+  account_number?: string | null;
+  opening_balance?: number;
+};
+
+type AccountTxn = {
+  id: string;
+  type: string;
+  account_id?: string | null;
+  to_account_id?: string | null;
+  amount: number;
+  note?: string | null;
+  txn_date?: string;
+};
+
 function AccountsPage() {
   const { t, lang } = useI18n();
   const qc = useQueryClient();
@@ -65,7 +85,7 @@ function AccountsPage() {
     queryFn: async () => {
       const res = await listCashAccountsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as CashAccount[];
     },
   });
 
@@ -74,15 +94,7 @@ function AccountsPage() {
     queryFn: async () => {
       const res = await listAccountTransactionsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows as Array<{
-        id: string;
-        type: string;
-        account_id?: string | null;
-        to_account_id?: string | null;
-        amount: number;
-        note?: string | null;
-        txn_date?: string;
-      }>;
+      return res.rows as AccountTxn[];
     },
   });
 
@@ -163,10 +175,11 @@ function AccountsPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
-  const accName = (id: string | null) => accounts.data?.find((a) => a.id === id)?.name ?? "—";
+  const accName = (id: string | null | undefined) =>
+    accounts.data?.find((a) => a.id === id)?.name ?? "—";
 
   const openTxn = (type: string) => {
-    setTxnForm({ ...emptyTxn, type, account_id: accounts.data?.[0]?.id ?? "" });
+    setTxnForm({ ...emptyTxn, type, account_id: String(accounts.data?.[0]?.id ?? "") });
     setTxnOpen(true);
   };
 

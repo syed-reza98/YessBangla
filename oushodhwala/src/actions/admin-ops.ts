@@ -72,7 +72,7 @@ export async function applyStockAdjustmentAction(input: StockAdjustmentInput) {
           adjId,
           productId: it.product_id,
           productName: prod[0].name || "",
-          change: actualChange,
+          changeQty: actualChange,
           beforeQty,
           afterQty,
           note: it.note || "",

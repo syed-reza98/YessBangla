@@ -7,7 +7,7 @@
  * the full pricing calculation. Orders placed while offline are queued and the
  * queue status (pending / retrying / failed) is shown with a retry button.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -72,7 +72,8 @@ export function CartDrawer({
   const [step, setStep] = useState<"cart" | "checkout">("cart");
   const [form, setForm] = useState({ name: "", phone: "", address: "", note: "" });
   const [errs, setErrs] = useState<Record<string, string>>({});
-  const [placing, setPlacing] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const placing = isPending;
   const [placed, setPlaced] = useState<number | null>(null);
   const [slot, setSlot] = useState<SlotChoice>(null);
   const [addressId, setAddressId] = useState<string | null>(null);
@@ -226,7 +227,7 @@ export function CartDrawer({
     return { parsed, fields };
   }
 
-  async function placeOrder() {
+  function placeOrder() {
     const { parsed, fields } = validate();
     setErrs(fields);
     if (!parsed.success || cart.lines.length === 0) {
@@ -293,64 +294,65 @@ export function CartDrawer({
     }
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      const entry = await queueOrder(orderRow, items);
-      toast.success(
-        bn
-          ? "অফলাইন — অনলাইনে এলে অর্ডার স্বয়ংক্রিয়ভাবে যাবে"
-          : "Offline — your order will be sent automatically when you reconnect",
-      );
-      setAnnounce(bn ? "অর্ডার সারিতে রাখা হয়েছে" : "Order queued");
-      finish(null, entry.id);
+      void (async () => {
+        const entry = await queueOrder(orderRow, items);
+        toast.success(
+          bn
+            ? "অফলাইন — অনলাইনে এলে অর্ডার স্বয়ংক্রিয়ভাবে যাবে"
+            : "Offline — your order will be sent automatically when you reconnect",
+        );
+        setAnnounce(bn ? "অর্ডার সারিতে রাখা হয়েছে" : "Order queued");
+        finish(null, entry.id);
+      })();
       return;
     }
 
-    setPlacing(true);
-    try {
-      const result = await placeDeliveryOrderAction({
-        customerName: orderRow.customer_name,
-        customerPhone: orderRow.customer_phone,
-        address: orderRow.address,
-        area: orderRow.area,
-        note: orderRow.note,
-        slot: orderRow.slot,
-        slotDate: orderRow.slot_date,
-        slotId: orderRow.slot_id,
-        paymentMethod: orderRow.payment_method,
-        subtotal: orderRow.subtotal,
-        discount: orderRow.discount,
-        couponCode: orderRow.coupon_code,
-        deliveryFee: orderRow.delivery_fee,
-        total: orderRow.total,
-        items: items.map((i) => ({
-          productId: i.product_id,
-          nameSnapshot: i.name_snapshot,
-          unitPrice: i.unit_price,
-          quantity: i.quantity,
-          lineTotal: i.line_total,
-        })),
-      });
-      if (!result.ok) {
-        toast.error(result.error);
-        setAnnounce(result.error);
-        return;
+    // Cart payload is not FormData-friendly — pending via useTransition (Standards).
+    startTransition(async () => {
+      try {
+        const result = await placeDeliveryOrderAction({
+          customerName: orderRow.customer_name,
+          customerPhone: orderRow.customer_phone,
+          address: orderRow.address,
+          area: orderRow.area,
+          note: orderRow.note,
+          slot: orderRow.slot,
+          slotDate: orderRow.slot_date,
+          slotId: orderRow.slot_id,
+          paymentMethod: orderRow.payment_method,
+          subtotal: orderRow.subtotal,
+          discount: orderRow.discount,
+          couponCode: orderRow.coupon_code,
+          deliveryFee: orderRow.delivery_fee,
+          total: orderRow.total,
+          items: items.map((i) => ({
+            productId: i.product_id,
+            nameSnapshot: i.name_snapshot,
+            unitPrice: i.unit_price,
+            quantity: i.quantity,
+            lineTotal: i.line_total,
+          })),
+        });
+        if (!result.ok) {
+          toast.error(result.error);
+          setAnnounce(result.error);
+          return;
+        }
+
+        toast.success(bn ? "অর্ডার নিশ্চিত হয়েছে" : "Order confirmed");
+        setAnnounce(bn ? "অর্ডার নিশ্চিত হয়েছে" : "Order confirmed");
+        finish(Number(result.orderNo), null);
+      } catch {
+        const entry = await queueOrder(orderRow, items);
+        toast.warning(
+          bn
+            ? "নেটওয়ার্ক সমস্যা — অর্ডার সারিতে রাখা হয়েছে"
+            : "Network issue — your order was queued and will retry",
+        );
+        setAnnounce(bn ? "অর্ডার সারিতে রাখা হয়েছে" : "Order queued");
+        finish(null, entry.id);
       }
-
-      toast.success(bn ? "অর্ডার নিশ্চিত হয়েছে" : "Order confirmed");
-      setAnnounce(bn ? "অর্ডার নিশ্চিত হয়েছে" : "Order confirmed");
-      finish(Number(result.orderNo), null);
-    } catch {
-      const entry = await queueOrder(orderRow, items);
-      toast.warning(
-        bn
-          ? "নেটওয়ার্ক সমস্যা — অর্ডার সারিতে রাখা হয়েছে"
-          : "Network issue — your order was queued and will retry",
-      );
-      setAnnounce(bn ? "অর্ডার সারিতে রাখা হয়েছে" : "Order queued");
-      finish(null, entry.id);
-    } finally {
-      setPlacing(false);
-    }
-
+    });
   }
 
   const couponBox = (

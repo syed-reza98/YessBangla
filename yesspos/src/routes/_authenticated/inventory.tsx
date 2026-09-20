@@ -42,8 +42,8 @@ export const Route = createFileRoute("/_authenticated/inventory")({
 type Row = {
   id: string;
   name: string;
-  sku: string;
-  unit: string;
+  sku: string | null;
+  unit: string | null;
   stock: number;
   lowAt: number;
   cost: number;
@@ -86,13 +86,13 @@ function InventoryPage() {
         return {
           id: String(p.id),
           name: lang === "bn" ? String(p.name_bn ?? "") : String(p.name_en ?? ""),
-          sku: p.sku as string | null,
-          unit: p.unit as string | null,
+          sku: (p.sku as string | null) ?? null,
+          unit: (p.unit as string | null) ?? null,
           stock,
           lowAt,
           cost: Number(p.cost ?? 0),
           price: Number(p.price ?? 0),
-          status: stock <= 0 ? "out" : stock <= lowAt ? "low" : "ok",
+          status: (stock <= 0 ? "out" : stock <= lowAt ? "low" : "ok") as Row["status"],
         } satisfies Row;
       });
     },
@@ -116,7 +116,7 @@ function InventoryPage() {
     return rows.filter((r) => {
       if (filter !== "all" && r.status !== filter) return false;
       if (!needle) return true;
-      return r.name.toLowerCase().includes(needle) || r.sku.toLowerCase().includes(needle);
+      return r.name.toLowerCase().includes(needle) || (r.sku ?? "").toLowerCase().includes(needle);
     });
   }, [rows, q, filter]);
 
@@ -131,8 +131,8 @@ function InventoryPage() {
       [t("products"), "SKU", t("unit"), t("stock"), t("lowStock"), t("costValue"), t("saleValue"), "Status"],
       list.map((r) => [
         r.name,
-        r.sku,
-        r.unit,
+        r.sku ?? "",
+        r.unit ?? "",
         r.stock,
         r.lowAt,
         (r.stock * r.cost).toFixed(2),

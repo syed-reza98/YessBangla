@@ -34,7 +34,11 @@ function PartyStatementPage() {
     queryFn: async () => {
       const res = await listContactsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as Array<{
+        id: string;
+        name: string;
+        opening_balance?: number | null;
+      }>;
     },
   });
 

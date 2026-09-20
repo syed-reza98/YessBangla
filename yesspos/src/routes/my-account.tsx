@@ -72,7 +72,17 @@ function MyAccountPage() {
     queryFn: async () => {
       const res = await listMyDeliveryOrdersAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows as Array<{ total?: number; status?: string; order_no?: number; id?: string; created_at?: string }>;
+      return res.rows as Array<{
+        total?: number;
+        status?: string;
+        order_no?: number;
+        id?: string;
+        created_at?: string;
+        slot?: string | null;
+        address?: string | null;
+        area?: string | null;
+        payment_method?: string | null;
+      }>;
     },
   });
 
@@ -216,7 +226,7 @@ function MyAccountPage() {
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(o.created_at).toLocaleString(bn ? "bn-BD" : "en-GB")} · {o.slot ?? "—"}
+                      {new Date(o.created_at ?? Date.now()).toLocaleString(bn ? "bn-BD" : "en-GB")} · {o.slot ?? "—"}
                     </p>
                     <p className="mt-1 text-sm">{o.address}, {o.area}</p>
                     <div className="mt-2 flex items-center justify-between text-sm">

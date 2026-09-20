@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { adjustStockAction } from "@/actions/inventory";
 import { listProductsAction } from "@/actions/catalog";
 import { listStockAdjustmentsAction, adjustStockAction } from "@/actions/inventory";
 import { useActiveBranch } from "@/lib/active-branch";
@@ -27,6 +26,21 @@ export const Route = createFileRoute("/_authenticated/stock-adjustments")({
   }),
   component: StockAdjustPage,
 });
+
+type ProductOption = {
+  id: string;
+  name_en?: string | null;
+  name_bn?: string | null;
+  stock?: number | null;
+};
+
+type AdjustmentRow = {
+  id: string;
+  product_id: string;
+  quantity_delta: number;
+  reason: string | null;
+  created_at: string | Date;
+};
 
 const emptyForm = { product_id: "", type: "add", quantity: "1", reason: "", adjusted_on: "" };
 
@@ -48,7 +62,7 @@ function StockAdjustPage() {
     queryFn: async () => {
       const res = await listProductsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as ProductOption[];
     },
   });
 
@@ -57,7 +71,7 @@ function StockAdjustPage() {
     queryFn: async () => {
       const res = await listStockAdjustmentsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return (res.rows ?? []) as AdjustmentRow[];
     },
   });
 
@@ -126,18 +140,26 @@ function StockAdjustPage() {
                 </td>
               </tr>
             )}
-            {(rows.data ?? []).map((r) => (
-              <tr key={r.id} className="border-t border-border">
-                <td className="px-3 py-2">{r.adjusted_on}</td>
-                <td className="px-3 py-2">{label(r.product_id)}</td>
-                <td className="px-3 py-2">{typeLabel(r.type)}</td>
-                <td className="px-3 py-2 text-right font-medium">
-                  {r.type === "add" ? "+" : "−"}
-                  {num(r.quantity, lang)}
-                </td>
-                <td className="px-3 py-2 text-muted-foreground">{r.reason ?? ""}</td>
-              </tr>
-            ))}
+            {(rows.data ?? []).map((r) => {
+              const delta = Number(r.quantity_delta);
+              const kind = delta >= 0 ? "add" : "remove";
+              const when =
+                r.created_at instanceof Date
+                  ? r.created_at.toISOString().slice(0, 10)
+                  : String(r.created_at).slice(0, 10);
+              return (
+                <tr key={r.id} className="border-t border-border">
+                  <td className="px-3 py-2">{when}</td>
+                  <td className="px-3 py-2">{label(r.product_id)}</td>
+                  <td className="px-3 py-2">{typeLabel(kind)}</td>
+                  <td className="px-3 py-2 text-right font-medium">
+                    {delta >= 0 ? "+" : "−"}
+                    {num(Math.abs(delta), lang)}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{r.reason ?? ""}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

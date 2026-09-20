@@ -162,6 +162,10 @@ export const prescriptions = mysqlTable("prescriptions", {
   reviewNotes: text("review_notes"),
   reviewedBy: varchar("reviewed_by", { length: 36 }),
   reviewedAt: timestamp("reviewed_at"),
+  guestToken: varchar("guest_token", { length: 64 }),
+  parsed: json("parsed"),
+  parsedAt: timestamp("parsed_at"),
+  parseNote: text("parse_note"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

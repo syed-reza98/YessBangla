@@ -11,7 +11,7 @@ import { Search, ShoppingBag } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LangToggle } from "@/components/LangToggle";
 import { CustomerAccountMenu } from "@/components/CustomerAccountMenu";
-import { StorefrontNav } from "@/components/StorefrontNav";
+import { StorefrontNav, type NavCategory } from "@/components/StorefrontNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listCategoriesAction } from "@/actions/catalog";
@@ -33,10 +33,7 @@ export function StorefrontHeader() {
     queryFn: async () => {
       const res = await listCategoriesAction();
       if (!res.ok) throw new Error(res.error);
-      const data = res.rows;
-      const error = null;
-      if (error) throw error;
-      return data ?? [];
+      return (res.rows ?? []) as NavCategory[];
     },
   });
 

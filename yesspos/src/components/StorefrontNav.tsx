@@ -51,7 +51,7 @@ type NavLink = { to?: string; href?: string; icon: LucideIcon; bn: string; en: s
 
 const LINKS: NavLink[] = [
   { to: "/", icon: Home, bn: "হোম", en: "Home" },
-  { to: "/shop", icon: ShoppingBasket, bn: "স্টোর", en: "Store" },
+  { to: "/#aisle", icon: ShoppingBasket, bn: "স্টোর", en: "Store" },
   { to: "/budget", icon: PiggyBank, bn: "বাজেট বাজার", en: "Budget planner" },
 
   { to: "/track", icon: Truck, bn: "অর্ডার ট্র্যাক", en: "Track order" },
@@ -229,9 +229,9 @@ export function StorefrontNav({
                           <Icon className="size-4" />
                         </span>
                         <span className="min-w-0 flex-1 truncate">
-                          <span className="block truncate font-medium">{c.name_bn}</span>
+                          <span className="block truncate font-medium">{c.name_bn || c.name_en || (c as any).name || ""}</span>
                           <span className="block truncate text-[11px] text-muted-foreground">
-                            {c.name_en}
+                            {c.name_en || (c as any).name || c.name_bn || ""}
                           </span>
                         </span>
                         <span className="shrink-0 text-[11px] text-muted-foreground">
@@ -339,10 +339,10 @@ export function StorefrontNav({
                               active && "text-primary",
                             )}
                           >
-                            {c.name_bn}
+                            {c.name_bn || c.name_en || (c as any).name || ""}
                           </span>
                           <span className="block truncate text-[11px] text-muted-foreground">
-                            {c.name_en}
+                            {c.name_en || (c as any).name || c.name_bn || ""}
                           </span>
                         </span>
                         <span className="shrink-0 text-[11px] text-muted-foreground">
@@ -396,7 +396,7 @@ export function StorefrontNav({
                 )}
               >
                 <Icon className="size-3.5" />
-                {bn ? c.name_bn : c.name_en}
+                {(bn ? c.name_bn : c.name_en) || c.name_en || c.name_bn || (c as any).name || ""}
               </Link>
             );
           })}

@@ -34,6 +34,35 @@ export const Route = createFileRoute("/_authenticated/journal")({
 
 type LineForm = { ledger_account_id: string; account_id: string; debit: string; credit: string; note: string };
 
+type LedgerHead = {
+  id: string;
+  code: string;
+  name_en: string;
+  name_bn: string;
+};
+
+type CashAccountOption = {
+  id: string;
+  name: string;
+};
+
+type JournalLine = {
+  id: string;
+  ledger_account_id?: string | null;
+  debit?: number | string;
+  credit?: number | string;
+};
+
+type JournalEntry = {
+  id: string;
+  voucher_no?: string | null;
+  entry_number?: string | null;
+  entry_date?: string | Date | null;
+  narration?: string | null;
+  memo?: string | null;
+  journal_lines?: JournalLine[];
+};
+
 const emptyLine: LineForm = { ledger_account_id: "", account_id: "", debit: "0", credit: "0", note: "" };
 
 function JournalPage() {
@@ -50,7 +79,20 @@ function JournalPage() {
     queryFn: async () => {
       const res = await listLedgerAccountsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.accounts;
+      return (res.accounts as Array<{
+        id: string;
+        code: string;
+        name?: string | null;
+        nameEn?: string | null;
+        nameBn?: string | null;
+      }>).map(
+        (a): LedgerHead => ({
+          id: a.id,
+          code: a.code,
+          name_en: a.nameEn ?? a.name ?? "",
+          name_bn: a.nameBn ?? a.name ?? "",
+        }),
+      );
     },
   });
 
@@ -59,7 +101,7 @@ function JournalPage() {
     queryFn: async () => {
       const res = await listCashAccountsAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as CashAccountOption[];
     },
   });
 
@@ -68,7 +110,7 @@ function JournalPage() {
     queryFn: async () => {
       const res = await listJournalEntriesAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as JournalEntry[];
     },
   });
 
@@ -138,16 +180,22 @@ function JournalPage() {
       </div>
 
       <div className="mt-4 space-y-3">
-        {(entries.data ?? []).map((e: any) => {
-          const dr = ((e.journal_lines as any[]) ?? []).reduce((s: number, l: any) => s + Number(l.debit), 0);
+        {(entries.data ?? []).map((e) => {
+          const dr = (e.journal_lines ?? []).reduce((s, l) => s + Number(l.debit), 0);
+          const when =
+            e.entry_date instanceof Date
+              ? e.entry_date.toISOString().slice(0, 10)
+              : e.entry_date
+                ? String(e.entry_date).slice(0, 10)
+                : "—";
           return (
             <div key={e.id} className="surface-panel p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="font-semibold">
-                    #{e.voucher_no} · {e.entry_date}
+                    #{e.voucher_no ?? e.entry_number ?? e.id.slice(0, 8)} · {when}
                   </p>
-                  <p className="text-sm text-muted-foreground">{e.narration ?? "—"}</p>
+                  <p className="text-sm text-muted-foreground">{e.narration ?? e.memo ?? "—"}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-display text-lg font-bold">{money(dr, lang)}</span>
@@ -165,9 +213,9 @@ function JournalPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {((e.journal_lines as any[]) ?? []).map((l: any) => (
+                  {(e.journal_lines ?? []).map((l) => (
                     <tr key={l.id} className="border-t border-border">
-                      <td className="py-1">{headName(l.ledger_account_id)}</td>
+                      <td className="py-1">{headName(l.ledger_account_id ?? null)}</td>
                       <td className="py-1 text-right">{Number(l.debit) ? money(Number(l.debit), lang) : "—"}</td>
                       <td className="py-1 text-right">{Number(l.credit) ? money(Number(l.credit), lang) : "—"}</td>
                     </tr>

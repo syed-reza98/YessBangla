@@ -30,3 +30,14 @@ Uploads: ensure `public/uploads` is writable.
 - Customer catalog → checkout (`placeOrderAction`)
 - Rx upload under `public/uploads`
 - Guest AskChat rate-limited (+ honeypot field `website`)
+
+## Apache
+
+Copy `public/.htaccess` to the domain docroot; replace `PASSENGER_PORT` with the Node app PORT. Env vars stay in cPanel only (never commit `.env`).
+
+## Standalone smoke
+
+```bash
+npm run build
+PORT=3001 node .next/standalone/server.js
+```

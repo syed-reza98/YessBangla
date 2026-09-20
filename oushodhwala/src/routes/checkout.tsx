@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
@@ -40,7 +40,8 @@ function Checkout() {
   const { user, profile } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const busy = isPending;
   const [payRef, setPayRef] = useState("");
   const [payment, setPayment] = useState("cod");
   const [note, setNote] = useState("");
@@ -98,7 +99,7 @@ function Checkout() {
 
   const needsRef = method === "bkash" || method === "nagad" || method === "card";
 
-  const submit = async () => {
+  const submit = () => {
     if (!user) {
       toast.error(t("অর্ডার করতে লগইন করুন", "Please log in to place an order"));
       void navigate({ to: "/auth" });
@@ -112,74 +113,74 @@ function Checkout() {
       toast.error(t("কিছু পণ্যের স্টক নেই — কার্ট আপডেট করুন", "Some products are out of stock — please update your cart"));
       return;
     }
-    setBusy(true);
-    opsStart("checkout", { items: cart.length, method });
-    try {
-      let ref = "";
-      if (needsRef) {
-        // সিমুলেটেড পেমেন্ট গেটওয়ে — কনফার্মেশনের পরে ট্রানজেকশন আইডি তৈরি হয়
-        await new Promise((r) => setTimeout(r, 900));
-        ref = payRef.trim() || `${method.toUpperCase()}${Math.floor(1e9 + Math.random() * 8e9)}`;
-      }
-      const result = await placeOrderAction({
-        items: cart.map((l) => ({
-          id: l.id,
-          kind: l.kind,
-          name: l.name,
-          price: l.price,
-          qty: l.qty,
-        })),
-        customerName: profile?.name || user.email || t("গ্রাহক", "Customer"),
-        phone: addr.phone,
-        address: `${addr.label} · ${addr.area} — ${addr.details}${note.trim() ? ` (${note.trim()})` : ""}`,
-        slot: effectiveSlot,
-        deliveryFee: delivery,
-        discount: couponCut + pointCut,
-        paymentMethod: method,
-        paymentRef: ref,
-      });
-      if (!result.ok) throw new Error(result.error);
-      if (pointCut > 0) {
-        const redeem = await redeemLoyaltyAction({
-          points: pointCut,
-          orderId: result.orderId,
-          note: `Order ${result.order_no}`,
+    // Cart/totals are not FormData-friendly — pending via useTransition (Standards).
+    startTransition(async () => {
+      opsStart("checkout", { items: cart.length, method });
+      try {
+        let ref = "";
+        if (needsRef) {
+          // সিমুলেটেড পেমেন্ট গেটওয়ে — কনফার্মেশনের পরে ট্রানজেকশন আইডি তৈরি হয়
+          await new Promise((r) => setTimeout(r, 900));
+          ref = payRef.trim() || `${method.toUpperCase()}${Math.floor(1e9 + Math.random() * 8e9)}`;
+        }
+        const result = await placeOrderAction({
+          items: cart.map((l) => ({
+            id: l.id,
+            kind: l.kind,
+            name: l.name,
+            price: l.price,
+            qty: l.qty,
+          })),
+          customerName: profile?.name || user.email || t("গ্রাহক", "Customer"),
+          phone: addr.phone,
+          address: `${addr.label} · ${addr.area} — ${addr.details}${note.trim() ? ` (${note.trim()})` : ""}`,
+          slot: effectiveSlot,
+          deliveryFee: delivery,
+          discount: couponCut + pointCut,
+          paymentMethod: method,
+          paymentRef: ref,
         });
-        if (!redeem.ok) console.error(redeem.error);
-        void qc.invalidateQueries({ queryKey: ["my-loyalty"] });
-        void qc.invalidateQueries({ queryKey: ["my-loyalty-tx"] });
-      }
-      clear();
-      setCouponCode(null);
-      void qc.invalidateQueries({ queryKey: catalogQueryKey });
-      void qc.invalidateQueries({ queryKey: ["my-orders"] });
-      void qc.invalidateQueries({ queryKey: ["my-notifications"] });
-      const orderNo = result.order_no ?? "";
-      if (orderNo && addr.lat != null && addr.lng != null) {
-        await saveOrderLocationAction(
-          result.orderId,
-          addr.lat,
-          addr.lng,
-          `${addr.label} · ${addr.area} — ${addr.details}`
-        );
-      }
-      opsSuccess("checkout", orderNo, { total, method, items: cart.length });
-      setPlaced(orderNo);
-    } catch (e) {
-      opsFailure("checkout", e, { method, items: cart.length });
-      const msg = e instanceof Error ? e.message : t("অর্ডার সম্পন্ন হয়নি", "Order could not be placed");
-      if (msg.startsWith("OUT_OF_STOCK")) {
-        const [, name, left] = msg.split(":");
-        toast.error(t(`${name} এর পর্যাপ্ত স্টক নেই (বাকি ${left} টি)`, `${name} does not have enough stock (${left} left)`));
+        if (!result.ok) throw new Error(result.error);
+        if (pointCut > 0) {
+          const redeem = await redeemLoyaltyAction({
+            points: pointCut,
+            orderId: result.orderId,
+            note: `Order ${result.order_no}`,
+          });
+          if (!redeem.ok) console.error(redeem.error);
+          void qc.invalidateQueries({ queryKey: ["my-loyalty"] });
+          void qc.invalidateQueries({ queryKey: ["my-loyalty-tx"] });
+        }
+        clear();
+        setCouponCode(null);
         void qc.invalidateQueries({ queryKey: catalogQueryKey });
-      } else if (msg.includes("AUTH_REQUIRED")) {
-        toast.error(t("অর্ডার করতে লগইন করুন", "Please log in to place an order"));
-      } else {
-        toast.error(msg);
+        void qc.invalidateQueries({ queryKey: ["my-orders"] });
+        void qc.invalidateQueries({ queryKey: ["my-notifications"] });
+        const orderNo = result.order_no ?? "";
+        if (orderNo && addr.lat != null && addr.lng != null) {
+          await saveOrderLocationAction(
+            result.orderId,
+            addr.lat,
+            addr.lng,
+            `${addr.label} · ${addr.area} — ${addr.details}`
+          );
+        }
+        opsSuccess("checkout", orderNo, { total, method, items: cart.length });
+        setPlaced(orderNo);
+      } catch (e) {
+        opsFailure("checkout", e, { method, items: cart.length });
+        const msg = e instanceof Error ? e.message : t("অর্ডার সম্পন্ন হয়নি", "Order could not be placed");
+        if (msg.startsWith("OUT_OF_STOCK")) {
+          const [, name, left] = msg.split(":");
+          toast.error(t(`${name} এর পর্যাপ্ত স্টক নেই (বাকি ${left} টি)`, `${name} does not have enough stock (${left} left)`));
+          void qc.invalidateQueries({ queryKey: catalogQueryKey });
+        } else if (msg.includes("AUTH_REQUIRED")) {
+          toast.error(t("অর্ডার করতে লগইন করুন", "Please log in to place an order"));
+        } else {
+          toast.error(msg);
+        }
       }
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   if (placed) {
@@ -436,7 +437,7 @@ function Checkout() {
           )}
           <button
             disabled={busy}
-            onClick={() => void submit()}
+            onClick={submit}
             className="mt-4 w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
             {busy ? t("প্রসেস হচ্ছে...", "Processing...") : needsRef ? t("পেমেন্ট করে অর্ডার নিশ্চিত করুন", "Pay and confirm order") : t("অর্ডার নিশ্চিত করুন", "Confirm order")}

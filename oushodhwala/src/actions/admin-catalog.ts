@@ -415,7 +415,7 @@ export async function addDoctorBlackoutAction(doctorId: string, day: string, rea
     await db.insert(doctorBlackouts).values({
       id: crypto.randomUUID(),
       doctorId,
-      day,
+      day: day as unknown as Date,
       reason: reason.trim() || null,
     });
     revalidatePath("/admin");
@@ -509,6 +509,39 @@ export async function updateAppSettingAction(key: string, value: string) {
   try {
     await requireStaff();
     await db.update(appSettings).set({ value }).where(eq(appSettings.key, key));
+    revalidatePath("/admin");
+    return { ok: true as const };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Insert or update a settings row by unique key (API hub env bases, etc.). */
+export async function upsertAppSettingAction(
+  key: string,
+  value: string,
+  label?: string
+) {
+  try {
+    await requireStaff();
+    const existing = await db
+      .select({ id: appSettings.id })
+      .from(appSettings)
+      .where(eq(appSettings.key, key))
+      .limit(1);
+    if (existing.length) {
+      await db
+        .update(appSettings)
+        .set({ value, ...(label !== undefined ? { label } : {}) })
+        .where(eq(appSettings.key, key));
+    } else {
+      await db.insert(appSettings).values({
+        id: crypto.randomUUID(),
+        key,
+        value,
+        label: label ?? null,
+      });
+    }
     revalidatePath("/admin");
     return { ok: true as const };
   } catch (err) {

@@ -71,8 +71,8 @@ function aliasCatalogRows(table: string, rows: any[]) {
     if (!r || typeof r !== "object") return r;
     const out: any = { ...r };
     if (table === "categories" || table === "brands" || table === "products") {
-      out.name_en = r.name_en ?? r.name ?? null;
-      out.name_bn = r.name_bn ?? null;
+      out.name_en = r.name_en ?? r.name ?? "";
+      out.name_bn = r.name_bn ?? out.name_en ?? "";
     }
     if (table === "products") {
       const price =

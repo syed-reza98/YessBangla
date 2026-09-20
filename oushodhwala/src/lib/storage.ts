@@ -1,4 +1,4 @@
-/** Local disk storage helpers — replaces supabase.storage */
+/** Local disk storage helpers — local disk uploads */
 
 import { uploadLocalFileAction } from "@/actions/uploads";
 

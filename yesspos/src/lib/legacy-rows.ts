@@ -46,11 +46,13 @@ export function productRow(r: Dict): Dict {
 }
 
 export function categoryRow(r: Dict): Dict {
+  const nameEn = (r.nameEn ?? r.name ?? "") as string;
+  const nameBn = (r.nameBn ?? nameEn) as string;
   return {
     id: r.id,
-    name: r.name,
-    name_en: r.nameEn ?? r.name,
-    name_bn: r.nameBn ?? null,
+    name: r.name ?? nameEn,
+    name_en: nameEn,
+    name_bn: nameBn,
     slug: r.slug,
     image_url: r.imageUrl ?? null,
     icon: r.icon ?? null,

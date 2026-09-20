@@ -966,7 +966,7 @@ function ShopPage() {
                   setCat(c.id);
                   setLimit(PAGE);
                 }}
-                label={bn ? c.name_bn : c.name_en}
+                label={(bn ? c.name_bn : c.name_en) || c.name_en || c.name_bn || (c as any).name || ""}
                 count={catCounts.get(c.id) ?? 0}
               />
             ))}
@@ -1010,6 +1010,7 @@ function ShopPage() {
                     setCat("");
                     setQuery("");
                     setLimit(PAGE);
+                    document.getElementById("aisle")?.scrollIntoView({ behavior: "smooth" });
                   }}
                 >
                   {bn ? "কেনাকাটা শুরু করুন" : "Start shopping"}
@@ -1108,10 +1109,10 @@ function ShopPage() {
                     )}
                   </span>
                   <span className="line-clamp-2 w-full text-sm font-bold leading-tight">
-                    {c.name_bn}
+                    {c.name_bn || c.name_en || (c as any).name || ""}
                   </span>
                   <span className="line-clamp-1 w-full text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {c.name_en}
+                    {c.name_en || (c as any).name || c.name_bn || ""}
                   </span>
                 </Link>
               ))}
@@ -1131,21 +1132,19 @@ function ShopPage() {
                   setCat(c.id);
                   setLimit(PAGE);
                 }}
-                label={bn ? c.name_bn : c.name_en}
+                label={(bn ? c.name_bn : c.name_en) || c.name_en || c.name_bn || (c as any).name || ""}
               />
             ))}
           </nav>
 
-          <div className="mt-8 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
+          <div id="aisle" className="mt-8 flex scroll-mt-24 flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {bn ? "আজকের বাজার" : "Today's aisle"}
               </p>
               <h2 className="font-display text-2xl font-extrabold">
                 {activeCat
-                  ? bn
-                    ? activeCat.name_bn
-                    : activeCat.name_en
+                  ? (bn ? activeCat.name_bn : activeCat.name_en) || activeCat.name_en || activeCat.name_bn || (activeCat as any).name
                   : query.trim()
                     ? `“${query.trim()}”`
                     : bn
@@ -1174,7 +1173,7 @@ function ShopPage() {
                 <option value="">{bn ? "সব ক্যাটাগরি" : "All categories"}</option>
                 {(categories.data ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
-                    {bn ? c.name_bn : c.name_en}
+                    {(bn ? c.name_bn : c.name_en) || c.name_en || c.name_bn || (c as any).name}
                   </option>
                 ))}
               </select>

@@ -52,9 +52,7 @@ const LANG_NOTE = {
   en: "[System instruction: the customer has selected English — you must answer this message in English.]",
 } as const;
 
-type Sb = { from: (t: string) => any; rpc: (f: string, a?: unknown) => any };
-
-function buildTools(_supabase?: Sb) {
+function buildTools() {
   return {
     search_products: tool({
       description: "ঔষধ বা স্বাস্থ্য পণ্য খুঁজে দাম, স্টক ও প্যাক জানার জন্য।",

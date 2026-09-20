@@ -44,6 +44,22 @@ const schema = z.object({
   note: z.string().trim().max(200),
 });
 
+type ExpenseCategory = {
+  id: string;
+  name_en?: string | null;
+  name_bn?: string | null;
+};
+
+type ExpenseRow = {
+  id: string;
+  category_id?: string | null;
+  amount: number;
+  spent_on?: string | null;
+  payment_method?: string | null;
+  reference?: string | null;
+  note?: string | null;
+};
+
 function ExpensesPage() {
   const { t, lang } = useI18n();
   const queryClient = useQueryClient();
@@ -55,7 +71,7 @@ function ExpensesPage() {
     queryFn: async () => {
       const res = await listExpenseCategoriesAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as ExpenseCategory[];
     },
   });
 
@@ -64,7 +80,7 @@ function ExpensesPage() {
     queryFn: async () => {
       const res = await listExpensesAction();
       if (!res.ok) throw new Error(res.error);
-      return res.rows;
+      return res.rows as ExpenseRow[];
     },
   });
 
@@ -73,13 +89,12 @@ function ExpensesPage() {
       const parsed = schema.safeParse({ ...form, amount: Number(form.amount) });
       if (!parsed.success) throw new Error(parsed.error.issues[0].message);
       const res = await createExpenseAction({
-        title: parsed.data.title,
         amount: parsed.data.amount,
         note: parsed.data.note || null,
-        category_id: form.category_id || null,
-        payment_method: form.payment_method,
-        user_id: userData.user?.id ?? null,
-        ...(form.spent_on ? { spent_on: form.spent_on } : {}),
+        reference: parsed.data.title,
+        categoryId: form.category_id || null,
+        paymentMethod: form.payment_method,
+        ...(form.spent_on ? { spentOn: form.spent_on } : {}),
       });
       if (!res.ok) throw new Error(res.error);
     },
@@ -134,14 +149,15 @@ function ExpensesPage() {
           <tbody>
             {(rows.data ?? []).map((r) => {
               const c = cats.data?.find((x) => x.id === r.category_id);
+              const title = r.reference || r.note || "—";
               return (
                 <tr key={r.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-medium">{r.title}</td>
+                  <td className="px-4 py-3 font-medium">{title}</td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {c ? (lang === "bn" ? c.name_bn : c.name_en) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{r.spent_on}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{r.payment_method}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{r.spent_on ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{r.payment_method ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-semibold">{money(Number(r.amount), lang)}</td>
                   <td className="px-4 py-3 text-right">
                     <Button

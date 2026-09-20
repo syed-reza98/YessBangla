@@ -1,8 +1,17 @@
-"use client";
+import type { Metadata } from "next";
+import { AboutStandardsPage } from "@/components/AboutStandardsPage";
 
-import { Route } from "@/routes/about.standards";
+export const metadata: Metadata = {
+  title: "International Standards — YESS Bangla",
+  description:
+    "How YESS Bangla is operated to international quality, security and delivery standards.",
+  openGraph: {
+    title: "International Standards — YESS Bangla",
+    description:
+      "ISO-aligned processes, senior-led delivery, 24/5 support and more.",
+  },
+};
 
 export default function Page() {
-  const Component = (Route as any).component as React.ComponentType;
-  return <Component />;
+  return <AboutStandardsPage />;
 }

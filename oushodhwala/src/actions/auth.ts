@@ -11,6 +11,41 @@ export type AuthActionResult =
   | { ok: true; userId?: string; roles?: string[] }
   | { ok: false; error: string; status?: number };
 
+export type SignUpFormState = {
+  ok: boolean;
+  error?: string;
+  userId?: string;
+  fieldErrors?: Partial<Record<"email" | "password" | "name" | "phone", string>>;
+};
+
+/** FormData entry for React 19 `useActionState` signup forms. */
+export async function customerSignUpFormAction(
+  _prev: SignUpFormState,
+  formData: FormData
+): Promise<SignUpFormState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+
+  const fieldErrors: SignUpFormState["fieldErrors"] = {};
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    fieldErrors.email = "Enter a valid email";
+  }
+  if (password.length < 6) fieldErrors.password = "Password must be at least 6 characters";
+  if (name.length < 2) fieldErrors.name = "Enter your full name";
+  if (!/^01\d{9}$/.test(phone)) fieldErrors.phone = "Enter a valid 11-digit mobile number";
+  if (Object.keys(fieldErrors).length > 0) {
+    return { ok: false, fieldErrors };
+  }
+
+  const result = await customerSignUpAction({ email, password, name, phone });
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+  return { ok: true, userId: result.userId };
+}
+
 export async function customerSignUpAction(input: {
   email: string;
   password: string;

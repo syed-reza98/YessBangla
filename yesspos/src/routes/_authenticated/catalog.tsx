@@ -28,6 +28,22 @@ export const Route = createFileRoute("/_authenticated/catalog")({
 });
 
 type TableName = "categories" | "brands" | "units";
+type CatalogActionTable = "categories" | "brands" | "subcategories";
+
+function toActionTable(table: TableName): CatalogActionTable {
+  switch (table) {
+    case "categories":
+      return "categories";
+    case "brands":
+      return "brands";
+    case "units":
+      return "subcategories";
+    default: {
+      const _exhaustive: never = table;
+      return _exhaustive;
+    }
+  }
+}
 
 const schema = z.object({
   name_bn: z.string().trim().min(1).max(60),
@@ -64,7 +80,7 @@ function CatalogList({ table, title }: { table: TableName; title: string }) {
       const parsed = schema.safeParse(form);
       if (!parsed.success) throw new Error(parsed.error.issues[0].message);
       const payload = hasLogo ? { ...parsed.data, logo_url: form.logo_url.trim() || null } : parsed.data;
-      const res = await insertCatalogRowAction({ table, payload });
+      const res = await insertCatalogRowAction({ table: toActionTable(table), payload });
       if (!res.ok) throw new Error(res.error);
     },
     onSuccess: () => {
@@ -78,7 +94,7 @@ function CatalogList({ table, title }: { table: TableName; title: string }) {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const res = await deleteCatalogRowAction({ table, id });
+      const res = await deleteCatalogRowAction({ table: toActionTable(table), id });
       if (!res.ok) throw new Error(res.error);
     },
     onSuccess: () => {

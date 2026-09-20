@@ -31,3 +31,14 @@ Uploads / proofs: ensure `public/uploads` is writable.
 - Storefront cart → checkout (`placeDeliveryOrderAction`) → `/track` + `/my-orders`
 - Delivery staff → `/delivery-orders` / `/riders` / `/delivery-zones` + proof upload
 - Media → `/media` writes under `public/uploads`
+
+## Apache
+
+Copy `public/.htaccess` to the domain docroot; replace `PASSENGER_PORT` with the Node app PORT. Env vars stay in cPanel only (never commit `.env`).
+
+## Standalone smoke
+
+```bash
+npm run build
+PORT=3001 node .next/standalone/server.js
+```

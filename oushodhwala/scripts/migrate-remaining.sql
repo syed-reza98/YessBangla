@@ -223,3 +223,14 @@ ALTER TABLE stock_alerts
 
 ALTER TABLE notifications
   ADD COLUMN IF NOT EXISTS order_no VARCHAR(100) DEFAULT '';
+
+-- ── Rx-read / AI parse cache (shim removal) ──
+ALTER TABLE prescriptions
+  ADD COLUMN IF NOT EXISTS guest_token VARCHAR(64) NULL,
+  ADD COLUMN IF NOT EXISTS parsed JSON NULL,
+  ADD COLUMN IF NOT EXISTS parsed_at TIMESTAMP NULL,
+  ADD COLUMN IF NOT EXISTS parse_note TEXT NULL;
+
+ALTER TABLE prescription_audit
+  ADD COLUMN IF NOT EXISTS version INT DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS user_id VARCHAR(36) NULL;
